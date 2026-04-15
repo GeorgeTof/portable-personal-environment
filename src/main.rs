@@ -1,35 +1,8 @@
 use std::fs;
+use crate::types::{DistroFamily};
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum DistroFamily {
-    Debian,
-    RedHat,
-    Arch,
-    OpenSuse,
-    Unknown(String),
-}
-
-impl DistroFamily {
-    pub fn is_supported(&self) -> bool {
-        matches!(self, DistroFamily::Debian)
-    }
-
-    pub fn from_os_string(family_string: &str) -> Self {
-        let s = family_string.to_lowercase();
-        
-        if s.contains("debian") {
-            DistroFamily::Debian
-        } else if s.contains("fedora") || s.contains("rhel") {
-            DistroFamily::RedHat
-        } else if s.contains("arch") {
-            DistroFamily::Arch
-        } else if s.contains("suse") {
-            DistroFamily::OpenSuse
-        } else {
-            DistroFamily::Unknown(s)
-        }
-    }
-}
+mod configuration;
+mod types;
 
 fn initial_checks() -> (bool, DistroFamily){
     // unsafe is required due to making a direct C system call
@@ -69,5 +42,8 @@ fn main() {
         return;
     }
 
-    return;
+    match configuration::configure(&host_distribution) {
+        Ok(result) => println!("{result}"),
+        Err(e) => eprintln!("Failed configuration due to error: {e}"),
+    }
 }
