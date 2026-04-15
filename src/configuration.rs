@@ -15,19 +15,40 @@ pub enum TaskStatus {
 
 pub fn configure(host_distribution: &DistroFamily) -> Result<String, String> {
     let tasks = vec![
-        Task { description: "TODO", action: install_prerequisites },
-        Task { description: "TODO", action: allow_veth_connections },
-        Task { description: "TODO", action: create_mount_location },
-        Task { description: "TODO", action: access_gpu_devices },
-        Task { description: "TODO", action: auto_mount },
-        Task { description: "TODO", action: create_intermediary_script },
-        Task { description: "TODO", action: link_desktop_shrtcut },
-        ];
+        Task { 
+            description: "TODO",
+            action: install_prerequisites 
+        },
+        Task { 
+            description: "TODO", 
+            action: allow_veth_connections 
+        },
+        Task { 
+            description: "TODO", 
+            action: create_mount_location 
+        },
+        Task { 
+            description: "TODO", 
+            action: access_gpu_devices 
+        },
+        Task { 
+            description: "TODO", 
+            action: auto_mount 
+        },
+        Task { 
+            description: "TODO", 
+            action: create_intermediary_script 
+        },
+        Task { 
+            description: "TODO", 
+            action: link_desktop_shrtcut 
+        },
+    ];
 
     println!("Starting host configuration...\n");
 
-    for task in tasks {
-        print!("{:<35} ", task.description); 
+    for (i, task) in tasks.iter().enumerate() {
+        print!("[{}/{}] {:<35} ", i + 1, tasks.len(), task.description); 
         io::stdout().flush().unwrap();
 
         match (task.action)(host_distribution) {
