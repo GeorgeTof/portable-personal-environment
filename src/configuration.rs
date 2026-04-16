@@ -1,4 +1,5 @@
 use std::io::{self, Write};
+use std::process::{Command, Stdio};
 
 use crate::types::{DistroFamily};
 
@@ -16,7 +17,7 @@ pub enum TaskStatus {
 pub fn configure(host_distribution: &DistroFamily) -> Result<String, String> {
     let tasks = vec![
         Task { 
-            description: "TODO",
+            description: "Install required packages",
             action: install_prerequisites 
         },
         Task { 
@@ -48,18 +49,17 @@ pub fn configure(host_distribution: &DistroFamily) -> Result<String, String> {
     println!("Starting host configuration...\n");
 
     for (i, task) in tasks.iter().enumerate() {
-        print!("[{}/{}] {:<35} ", i + 1, tasks.len(), task.description); 
-        io::stdout().flush().unwrap();
+        println!("[{}/{}] {}", i + 1, tasks.len(), task.description);
 
         match (task.action)(host_distribution) {
             Ok(TaskStatus::Configured) => {
-                println!("[ ✅ DONE ]");
+                println!("{:>75}", "[ DONE ]\n"); // todo: maybe add emojis / visual clue
             }
             Ok(TaskStatus::JustChecked) => {
-                println!("[ ⏭️ ALREADY CONFIGURED ]");
+                println!("{:>75}", "[ ALREADY CONFIGURED ]\n");
             }
             Err(error_msg) => {
-                println!("[ ❌ FAILED ]");
+                println!("{:>75}", "[ FAILED ]\n");
                 eprintln!("\nFatal Error: {}", error_msg);
                 eprintln!("Aborting configuration.");
                 return Err(error_msg);
@@ -72,7 +72,77 @@ pub fn configure(host_distribution: &DistroFamily) -> Result<String, String> {
 
 
 fn install_prerequisites(distro: &DistroFamily) -> Result<TaskStatus, String> {
-    Ok(TaskStatus::Configured) 
+    let required_packages = vec!["lxc", "lxc-utils", "lxc-templates", "uidmap", "acl"];
+
+    match distro {
+        DistroFamily::Debian => handle_debian_prerequisites(&required_packages),
+        _ => Err("Distribution family packet manager not supported".to_string()),
+    }
+
+    // checkpoint TODO move main logic here and separate 2 specific distro functions: check and install
+}
+
+fn handle_debian_prerequisites(packages: &[&str]) -> Result<TaskStatus, String> {
+    let mut installed = Vec::new();
+    let mut missing = Vec::new();
+
+    for &pkg in packages {
+        let status = Command::new("dpkg")
+            .arg("-s")
+            .arg(pkg)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .map_err(|e| format!("Failed to execute dpkg: {}", e))?;
+
+        if status.success() {
+            installed.push(pkg);
+        } else {
+            missing.push(pkg);
+        }
+    }
+
+    if !installed.is_empty() {
+        println!("\n  -> Already installed: {}", installed.join(", "));
+    }
+
+    if missing.is_empty() {
+        return Ok(TaskStatus::JustChecked);
+    }
+
+    print!("\n  -> Starting installation of: {} ...", missing.join(", "));
+    io::stdout().flush().map_err(|e| e.to_string())?;
+
+    // update apt cache first silently
+    let _ = Command::new("apt-get")
+        .arg("update")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+
+    let mut install_cmd = Command::new("apt-get");
+    install_cmd
+        .env("DEBIAN_FRONTEND", "noninteractive")
+        .arg("install")
+        .arg("-y");
+
+    for pkg in &missing {
+        install_cmd.arg(pkg);
+    }
+
+    // can check status in another terminal with: tail -f /var/log/dpkg.log
+    let install_status = install_cmd
+        .stdout(Stdio::null()) 
+        .stderr(Stdio::piped()) // suppressed, can capture stderr to debug if needed
+        .status()
+        .map_err(|e| format!("Failed to execute apt-get install: {}", e))?;
+
+    if install_status.success() {
+        println!("\n  -> Installation successful!");
+        Ok(TaskStatus::Configured)
+    } else {
+        Err(format!("Failed to install packages via apt-get. Ensure you have internet connectivity."))
+    }
 }
 
 fn allow_veth_connections(_distro: &DistroFamily) -> Result<TaskStatus, String> {
