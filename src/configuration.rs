@@ -21,7 +21,7 @@ pub fn configure(host_distribution: &DistroFamily) -> Result<String, String> {
             action: install_prerequisites 
         },
         Task { 
-            description: "TODO", 
+            description: "Allow user to create virtual ethernet connections", 
             action: allow_veth_connections 
         },
         Task { 
@@ -155,7 +155,29 @@ fn install_debian_prerequisites(missing: &[&str]) -> Result<(), String> {
 }
 
 fn allow_veth_connections(_distro: &DistroFamily) -> Result<TaskStatus, String> {
-    Err("Could not connect to server".to_string())
+    let sudo_user = std::env::var("SUDO_USER").map_err(|_| {
+        "Could not determine original user.".to_string()
+    })?;
+
+    let usernet_path = "/etc/lxc/lxc-usernet";
+    let expected_line = format!("{} veth lxcbr0 10", sudo_user);
+
+    if let Ok(contents) = std::fs::read_to_string(usernet_path) {
+        if contents.lines().any(|line| line.trim() == expected_line) {
+            return Ok(TaskStatus::JustChecked);
+        }
+    }
+
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(usernet_path)
+        .map_err(|e| format!("Failed to open {}: {}", usernet_path, e))?;
+
+    writeln!(file, "{}", expected_line)
+        .map_err(|e| format!("Failed to write to {}: {}", usernet_path, e))?;
+
+    Ok(TaskStatus::Configured)
 }
 
 fn create_mount_location(_distro: &DistroFamily) -> Result<TaskStatus, String> {
