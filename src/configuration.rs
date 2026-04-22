@@ -71,20 +71,36 @@ pub fn configure(host_distribution: &DistroFamily) -> Result<String, String> {
 }
 
 
-fn install_prerequisites(distro: &DistroFamily) -> Result<TaskStatus, String> {
+fn install_prerequisites(distro: &DistroFamily) -> Result<TaskStatus, String> { // optional todo : have some sort of real time feedback during the long instalation
     let required_packages = vec!["lxc", "lxc-utils", "lxc-templates", "uidmap", "acl"];
-
-    match distro {
-        DistroFamily::Debian => handle_debian_prerequisites(&required_packages),
-        _ => Err("Distribution family packet manager not supported".to_string()),
-    }
-
-    // checkpoint TODO move main logic here and separate 2 specific distro functions: check and install
-}
-
-fn handle_debian_prerequisites(packages: &[&str]) -> Result<TaskStatus, String> {
     let mut installed = Vec::new();
     let mut missing = Vec::new();
+
+    match distro {
+        DistroFamily::Debian => check_debian_prerequisites(&required_packages, &mut installed, &mut missing)?,
+        _ => return Err("Distribution family packet manager not supported".to_string()),
+    }
+
+    if !installed.is_empty() {
+        println!("\n  -> Already installed: {}", installed.join(", "));
+    }
+
+    if missing.is_empty() {
+        return Ok(TaskStatus::JustChecked);
+    }
+
+    print!("\n  -> Starting installation of: {} ...", missing.join(", "));
+    io::stdout().flush().map_err(|e| e.to_string())?;
+
+    match distro {
+        DistroFamily::Debian => install_debian_prerequisites(&missing)?,
+        _ => return Err("Distribution family packet manager not supported".to_string()),
+    }
+
+    Ok(TaskStatus::Configured)
+}
+
+fn check_debian_prerequisites<'a>(packages: &[&'a str], installed: &mut Vec<&'a str>, missing: &mut Vec<&'a str>) -> Result<(), String> {
 
     for &pkg in packages {
         let status = Command::new("dpkg")
@@ -100,19 +116,12 @@ fn handle_debian_prerequisites(packages: &[&str]) -> Result<TaskStatus, String> 
         } else {
             missing.push(pkg);
         }
-    }
+    }    
 
-    if !installed.is_empty() {
-        println!("\n  -> Already installed: {}", installed.join(", "));
-    }
+    Ok(())
+}
 
-    if missing.is_empty() {
-        return Ok(TaskStatus::JustChecked);
-    }
-
-    print!("\n  -> Starting installation of: {} ...", missing.join(", "));
-    io::stdout().flush().map_err(|e| e.to_string())?;
-
+fn install_debian_prerequisites(missing: &[&str]) -> Result<(), String> {
     // update apt cache first silently
     let _ = Command::new("apt-get")
         .arg("update")
@@ -126,11 +135,11 @@ fn handle_debian_prerequisites(packages: &[&str]) -> Result<TaskStatus, String> 
         .arg("install")
         .arg("-y");
 
-    for pkg in &missing {
+    for pkg in missing {
         install_cmd.arg(pkg);
     }
 
-    // can check status in another terminal with: tail -f /var/log/dpkg.log
+    // can check real-time status in another terminal with: tail -f /var/log/dpkg.log
     let install_status = install_cmd
         .stdout(Stdio::null()) 
         .stderr(Stdio::piped()) // suppressed, can capture stderr to debug if needed
@@ -139,7 +148,7 @@ fn handle_debian_prerequisites(packages: &[&str]) -> Result<TaskStatus, String> 
 
     if install_status.success() {
         println!("\n  -> Installation successful!");
-        Ok(TaskStatus::Configured)
+        Ok(())
     } else {
         Err(format!("Failed to install packages via apt-get. Ensure you have internet connectivity."))
     }
