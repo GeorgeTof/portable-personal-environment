@@ -34,7 +34,7 @@ pub fn configure(host_distribution: &DistroFamily) -> Result<String, String> {
             action: access_gpu_devices 
         },
         Task { 
-            description: "TODO", 
+            description: "Configure automatically mounting the external drive", 
             action: auto_mount 
         },
         Task { 
@@ -183,10 +183,29 @@ fn allow_veth_connections(_distro: &DistroFamily) -> Result<TaskStatus, String> 
 
 fn create_mount_location(_distro: &DistroFamily) -> Result<TaskStatus, String> {
     let mount_path = "/mnt/ppe";
+    let automount_unit = "mnt-ppe.automount";
+    let mut already_configured = false;
     
     let sudo_user = std::env::var("SUDO_USER").map_err(|_| {
         "Could not determine original user.".to_string()
     })?;
+
+    let was_automount_active = Command::new("systemctl")
+        .arg("is-active")
+        .arg("--quiet")
+        .arg(automount_unit)
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+
+    if was_automount_active {
+        let _ = Command::new("systemctl")
+            .arg("stop")
+            .arg(automount_unit)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+    }
 
     // import increases executable size by 4MB (0.5 to 4.5 MB) -> todo: consider if worth keeping it
     // all following operations are idempotent anyway, may just check if the directory exists
@@ -206,40 +225,55 @@ fn create_mount_location(_distro: &DistroFamily) -> Result<TaskStatus, String> {
                 let has_others_exec = (metadata.mode() & 0b000_000_001) != 0;
 
                 if is_correct_owner && has_others_exec {
-                    return Ok(TaskStatus::JustChecked);
+                    already_configured = true;
                 }
             }
         }
     }
 
-    print!("\n  -> Creating the mount location: {} ...", mount_path);
-    std::fs::create_dir_all(mount_path)
-        .map_err(|e| format!("Failed to create directory {}: {}", mount_path, e))?;
-
-    print!("\n  -> Making current user its owner");
-    // (User:Group)
-    let chown_status = Command::new("chown")
-        .arg(format!("{}:{}", sudo_user, sudo_user)) 
-        .arg(mount_path)
-        .status()
-        .map_err(|e| format!("Failed to execute chown: {}", e))?;
-
-    if !chown_status.success() {
-        return Err(format!("Failed to set ownership for {}", mount_path));
+    if !already_configured {
+        print!("\n  -> Creating the mount location: {} ...", mount_path);
+        std::fs::create_dir_all(mount_path)
+            .map_err(|e| format!("Failed to create directory {}: {}", mount_path, e))?;
+    
+        print!("\n  -> Making current user its owner");
+        // (User:Group)
+        let chown_status = Command::new("chown")
+            .arg(format!("{}:{}", sudo_user, sudo_user)) 
+            .arg(mount_path)
+            .status()
+            .map_err(|e| format!("Failed to execute chown: {}", e))?;
+    
+        if !chown_status.success() {
+            return Err(format!("Failed to set ownership for {}", mount_path));
+        }
+    
+        print!("\n  -> Allowing traversal for all users \n");
+        let chmod_status = Command::new("chmod")
+            .arg("o+x")
+            .arg(mount_path)
+            .status()
+            .map_err(|e| format!("Failed to execute chmod: {}", e))?;
+    
+        if !chmod_status.success() {
+            return Err(format!("Failed to set traversal permissions for {}", mount_path));
+        }
     }
 
-    print!("\n  -> Allowing traversal for all users \n");
-    let chmod_status = Command::new("chmod")
-        .arg("o+x")
-        .arg(mount_path)
-        .status()
-        .map_err(|e| format!("Failed to execute chmod: {}", e))?;
-
-    if !chmod_status.success() {
-        return Err(format!("Failed to set traversal permissions for {}", mount_path));
+    if was_automount_active {
+        let _ = Command::new("systemctl")
+            .arg("start")
+            .arg(automount_unit)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
     }
 
-    Ok(TaskStatus::Configured)
+    if already_configured {
+        Ok(TaskStatus::JustChecked)
+    } else {
+        Ok(TaskStatus::Configured)
+    }
 }
 
 fn access_gpu_devices(_distro: &DistroFamily) -> Result<TaskStatus, String> {
@@ -281,7 +315,72 @@ fn access_gpu_devices(_distro: &DistroFamily) -> Result<TaskStatus, String> {
 }
 
 fn auto_mount(_distro: &DistroFamily) -> Result<TaskStatus, String> {
-    Err("NOT IMPLEMENTED.".to_string())
+    let udev_rule_path = "/etc/udev/rules.d/99-ignore-ppe.rules";
+    let udev_content = "SUBSYSTEM==\"block\", ENV{ID_FS_LABEL}==\"PPE\", ENV{UDISKS_IGNORE}=\"1\"\n";
+
+    let mount_unit_path = "/etc/systemd/system/mnt-ppe.mount";
+    let mount_content = "[Unit]\n\
+                        Description=Mount PPE Drive\n\n\
+                        [Mount]\n\
+                        What=/dev/disk/by-label/PPE\n\
+                        Where=/mnt/ppe\n\
+                        Type=ext4\n\
+                        Options=defaults,noatime,users\n";
+
+    let automount_unit_path = "/etc/systemd/system/mnt-ppe.automount";
+    let automount_content = "[Unit]\n\
+                             Description=Automount PPE Drive\n\n\
+                             [Automount]\n\
+                             Where=/mnt/ppe\n\n\
+                             [Install]\n\
+                             WantedBy=multi-user.target\n";
+
+    let udev_ok = std::fs::read_to_string(udev_rule_path).unwrap_or_default() == udev_content;
+    let mount_ok = std::fs::read_to_string(mount_unit_path).unwrap_or_default() == mount_content;
+    let automount_ok = std::fs::read_to_string(automount_unit_path).unwrap_or_default() == automount_content;
+
+    if udev_ok && mount_ok && automount_ok {
+        return Ok(TaskStatus::JustChecked);
+    }
+
+    std::fs::write(udev_rule_path, udev_content)
+        .map_err(|e| format!("Failed to write udev ignore rule: {}", e))?;
+    std::fs::write(mount_unit_path, mount_content)
+        .map_err(|e| format!("Failed to write mount unit: {}", e))?;
+    std::fs::write(automount_unit_path, automount_content)
+        .map_err(|e| format!("Failed to write automount unit: {}", e))?;
+
+    // TODO - refactor this reloading in separate method
+    // bypass automatic mounting to ~/media/
+    Command::new("udevadm")
+        .arg("control")
+        .arg("--reload-rules")
+        .status()
+        .map_err(|e| format!("Failed to reload udev rules: {}", e))?;
+        
+    Command::new("udevadm")
+        .arg("trigger")
+        .status()
+        .map_err(|e| format!("Failed to trigger udev rules: {}", e))?;
+
+    // reload systemd and enable the automount unit
+    Command::new("systemctl")
+        .arg("daemon-reload")
+        .status()
+        .map_err(|e| format!("Failed to execute systemctl daemon-reload: {}", e))?;
+
+    let enable_status = Command::new("systemctl")
+        .arg("enable")
+        .arg("--now") 
+        .arg("mnt-ppe.automount")
+        .status()
+        .map_err(|e| format!("Failed to execute systemctl enable: {}", e))?;
+
+    if !enable_status.success() {
+        return Err("Failed to enable and start mnt-ppe.automount. Check journalctl -xe for details.".to_string());
+    }
+
+    Ok(TaskStatus::Configured)
 }
 
 fn create_intermediary_script(_distro: &DistroFamily) -> Result<TaskStatus, String> {
