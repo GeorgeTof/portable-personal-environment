@@ -30,7 +30,7 @@ pub fn configure(host_distribution: &DistroFamily) -> Result<String, String> {
             action: create_mount_location 
         },
         Task { 
-            description: "TODO", // checkpoint
+            description: "Create custom udev rule for granting GPU access",
             action: access_gpu_devices 
         },
         Task { 
@@ -243,7 +243,41 @@ fn create_mount_location(_distro: &DistroFamily) -> Result<TaskStatus, String> {
 }
 
 fn access_gpu_devices(_distro: &DistroFamily) -> Result<TaskStatus, String> {
-    Err("NOT IMPLEMENTED.".to_string())
+    let rule_path = "/etc/udev/rules.d/99-lxc-gpu.rules";
+    let rule_content = "ACTION==\"add|change\", SUBSYSTEM==\"drm\", RUN+=\"/usr/bin/setfacl -m u:100000:rw $env{DEVNAME}\"\n";
+
+    if let Ok(existing_content) = std::fs::read_to_string(rule_path) {
+        if existing_content == rule_content {
+            return Ok(TaskStatus::JustChecked);
+        }
+    }
+
+    std::fs::write(rule_path, rule_content)
+        .map_err(|e| format!("Failed to write udev rule to {}: {}", rule_path, e))?;
+
+    // reload the udev rules - for immediate effect
+    let reload_status = Command::new("udevadm")
+        .arg("control")
+        .arg("--reload-rules")
+        .status()
+        .map_err(|e| format!("Failed to execute udevadm control: {}", e))?;
+
+    if !reload_status.success() {
+        return Err("Failed to reload udev rules".to_string());
+    }
+
+    // trigger the new rule - to apply immediately to existing GPU devices
+    let trigger_status = Command::new("udevadm")
+        .arg("trigger")
+        .arg("--subsystem-match=drm")
+        .status()
+        .map_err(|e| format!("Failed to execute udevadm trigger: {}", e))?;
+
+    if !trigger_status.success() {
+        return Err("Failed to trigger udev rules".to_string());
+    }
+
+    Ok(TaskStatus::Configured)
 }
 
 fn auto_mount(_distro: &DistroFamily) -> Result<TaskStatus, String> {
