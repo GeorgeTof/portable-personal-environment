@@ -157,7 +157,7 @@ fn install_debian_prerequisites(missing: &[&str]) -> Result<(), String> {
 
 fn allow_veth_connections(_distro: &DistroFamily) -> Result<TaskStatus, String> {
     let sudo_user = std::env::var("SUDO_USER").map_err(|_| {
-        "Could not determine original user.".to_string()
+        "Could not determine original user. Please run the script with sudo!".to_string()
     })?;
 
     let usernet_path = "/etc/lxc/lxc-usernet";
@@ -187,7 +187,7 @@ fn create_mount_location(_distro: &DistroFamily) -> Result<TaskStatus, String> {
     let mut already_configured = false;
     
     let sudo_user = std::env::var("SUDO_USER").map_err(|_| {
-        "Could not determine original user.".to_string()
+        "Could not determine original user. Please run the script with sudo!".to_string()
     })?;
 
     let was_automount_active = Command::new("systemctl")
