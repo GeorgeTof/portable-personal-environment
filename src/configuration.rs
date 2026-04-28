@@ -42,7 +42,7 @@ pub fn configure(host_distribution: &DistroFamily) -> Result<String, String> {
             action: allow_unprivileged_mount 
         },
         Task { 
-            description: "TODO", 
+            description: "Create the host launch script stub", 
             action: create_intermediary_script 
         },
         Task { 
@@ -329,7 +329,7 @@ fn auto_mount(_distro: &DistroFamily) -> Result<TaskStatus, String> {
                         What=/dev/disk/by-label/PPE\n\
                         Where=/mnt/ppe\n\
                         Type=ext4\n\
-                        Options=defaults,noatime,users\n";
+                        Options=defaults,noatime,exec\n";
 
     let automount_unit_path = "/etc/systemd/system/mnt-ppe.automount";
     let automount_content = "[Unit]\n\
@@ -411,7 +411,58 @@ fn allow_unprivileged_mount(_distro: &DistroFamily) -> Result<TaskStatus, String
 }
 
 fn create_intermediary_script(_distro: &DistroFamily) -> Result<TaskStatus, String> {
-    Err("NOT IMPLEMENTED.".to_string())
+    let stub_path = "/usr/local/bin/ppe-launcher-stub";
+    
+    let stub_content = r#"#!/bin/bash
+
+notify_error() {
+    notify-send -u critical -i drive-removable-media "PPE Launcher" "$1"
+}
+
+sudo /bin/systemctl stop mnt-ppe.automount
+sudo /bin/systemctl stop mnt-ppe.mount
+sudo /bin/systemctl reset-failed mnt-ppe.automount 2>/dev/null || true
+sudo /bin/systemctl reset-failed mnt-ppe.mount 2>/dev/null || true
+
+if [ ! -e "/dev/disk/by-label/PPE" ]; then
+    notify_error "PPE drive not found! Please insert the external drive and try again."
+    exit 1
+fi
+
+sudo /bin/systemctl start mnt-ppe.automount
+
+SESSION_SCRIPT="/mnt/ppe/ppe-launcher.sh"
+
+if [ ! -f "$SESSION_SCRIPT" ]; then
+    notify_error "Session script (ppe-launcher.sh) not found on the drive!"
+    sudo /bin/systemctl stop mnt-ppe.automount
+    exit 1
+fi
+
+exec "$SESSION_SCRIPT"
+"#;
+
+    if let Ok(existing_content) = std::fs::read_to_string(stub_path) {
+        if existing_content == stub_content {
+            return Ok(TaskStatus::JustChecked);
+        }
+    }
+
+    std::fs::write(stub_path, stub_content)
+        .map_err(|e| format!("Failed to write stub script to {}: {}", stub_path, e))?;
+
+    // only r+x permissions for unprivileged users
+    let chmod_status = Command::new("chmod")
+        .arg("755")
+        .arg(stub_path)
+        .status()
+        .map_err(|e| format!("Failed to set permissions on stub script: {}", e))?;
+
+    if !chmod_status.success() {
+        return Err("Failed to make stub script executable".to_string());
+    }
+
+    Ok(TaskStatus::Configured)
 }
 
 fn link_desktop_shrtcut(_distro: &DistroFamily) -> Result<TaskStatus, String> {
