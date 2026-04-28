@@ -38,6 +38,10 @@ pub fn configure(host_distribution: &DistroFamily) -> Result<String, String> {
             action: auto_mount 
         },
         Task { 
+            description: "Allow unprivileged mount management", 
+            action: allow_unprivileged_mount 
+        },
+        Task { 
             description: "TODO", 
             action: create_intermediary_script 
         },
@@ -157,7 +161,7 @@ fn install_debian_prerequisites(missing: &[&str]) -> Result<(), String> {
 
 fn allow_veth_connections(_distro: &DistroFamily) -> Result<TaskStatus, String> {
     let sudo_user = std::env::var("SUDO_USER").map_err(|_| {
-        "Could not determine original user. Please run the script with sudo!".to_string()
+        "Could not determine original user. Please run with sudo!".to_string()
     })?;
 
     let usernet_path = "/etc/lxc/lxc-usernet";
@@ -187,7 +191,7 @@ fn create_mount_location(_distro: &DistroFamily) -> Result<TaskStatus, String> {
     let mut already_configured = false;
     
     let sudo_user = std::env::var("SUDO_USER").map_err(|_| {
-        "Could not determine original user. Please run the script with sudo!".to_string()
+        "Could not determine original user. Please run with sudo!".to_string()
     })?;
 
     let was_automount_active = Command::new("systemctl")
@@ -331,9 +335,7 @@ fn auto_mount(_distro: &DistroFamily) -> Result<TaskStatus, String> {
     let automount_content = "[Unit]\n\
                              Description=Automount PPE Drive\n\n\
                              [Automount]\n\
-                             Where=/mnt/ppe\n\n\
-                             [Install]\n\
-                             WantedBy=multi-user.target\n";
+                             Where=/mnt/ppe\n";
 
     let udev_ok = std::fs::read_to_string(udev_rule_path).unwrap_or_default() == udev_content;
     let mount_ok = std::fs::read_to_string(mount_unit_path).unwrap_or_default() == mount_content;
@@ -350,7 +352,6 @@ fn auto_mount(_distro: &DistroFamily) -> Result<TaskStatus, String> {
     std::fs::write(automount_unit_path, automount_content)
         .map_err(|e| format!("Failed to write automount unit: {}", e))?;
 
-    // TODO - refactor this reloading in separate method
     // bypass automatic mounting to ~/media/
     Command::new("udevadm")
         .arg("control")
@@ -363,21 +364,47 @@ fn auto_mount(_distro: &DistroFamily) -> Result<TaskStatus, String> {
         .status()
         .map_err(|e| format!("Failed to trigger udev rules: {}", e))?;
 
-    // reload systemd and enable the automount unit
+    // reload systemd daemon
     Command::new("systemctl")
         .arg("daemon-reload")
         .status()
         .map_err(|e| format!("Failed to execute systemctl daemon-reload: {}", e))?;
 
-    let enable_status = Command::new("systemctl")
-        .arg("enable")
-        .arg("--now") 
-        .arg("mnt-ppe.automount")
-        .status()
-        .map_err(|e| format!("Failed to execute systemctl enable: {}", e))?;
+    Ok(TaskStatus::Configured)
+}
 
-    if !enable_status.success() {
-        return Err("Failed to enable and start mnt-ppe.automount. Check journalctl -xe for details.".to_string());
+fn allow_unprivileged_mount(_distro: &DistroFamily) -> Result<TaskStatus, String> {
+    let sudo_user = std::env::var("SUDO_USER").map_err(|_| {
+        "Could not determine original user. Please run with sudo!".to_string()
+    })?;
+
+    // large index (99) guarantees that the rules will be applied last and overwrite the previous ones
+    let sudoers_path = "/etc/sudoers.d/99-ppe-mount";
+    
+    // allow stop, reset-failed, and start without a password
+    let sudoers_content = format!(
+        "{} ALL=(ALL) NOPASSWD: /bin/systemctl stop mnt-ppe.automount, /bin/systemctl stop mnt-ppe.mount, /bin/systemctl reset-failed mnt-ppe.automount, /bin/systemctl reset-failed mnt-ppe.mount, /bin/systemctl start mnt-ppe.automount\n",
+        sudo_user
+    );
+
+    if let Ok(existing_content) = std::fs::read_to_string(sudoers_path) {
+        if existing_content == sudoers_content {
+            return Ok(TaskStatus::JustChecked);
+        }
+    }
+
+    std::fs::write(sudoers_path, &sudoers_content)
+        .map_err(|e| format!("Failed to write sudoers rule to {}: {}", sudoers_path, e))?;
+
+    // sudoers files must have 0440 permissions, otherwise sudo will break or ignore them
+    let chmod_status = Command::new("chmod")
+        .arg("0440")
+        .arg(sudoers_path)
+        .status()
+        .map_err(|e| format!("Failed to execute chmod on sudoers file: {}", e))?;
+
+    if !chmod_status.success() {
+        return Err("Failed to set strict permissions on sudoers file".to_string());
     }
 
     Ok(TaskStatus::Configured)
