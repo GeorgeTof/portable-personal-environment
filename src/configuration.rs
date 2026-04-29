@@ -46,7 +46,7 @@ pub fn configure(host_distribution: &DistroFamily) -> Result<String, String> {
             action: create_intermediary_script 
         },
         Task { 
-            description: "Create desktop entry for the launcher", 
+            description: "Create the 'PPE Launcher' desktop entry", 
             action: link_desktop_shrtcut 
         },
     ];

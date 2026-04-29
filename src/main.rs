@@ -43,7 +43,10 @@ fn main() {
     }
 
     match configuration::configure(&host_distribution) {
-        Ok(result) => println!("{result}"),
+        Ok(result) => {
+            println!("{result}");
+            println!("Please close the terminal window and remove the external drive.");
+        },
         Err(e) => eprintln!("Failed configuration due to error: {e}"),
     }
 }
