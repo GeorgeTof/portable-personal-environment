@@ -3,7 +3,7 @@ use std::process::{Command, Stdio};
 use std::os::unix::fs::MetadataExt; // heavy import
 
 use crate::types::{DistroFamily};
-
+use crate::templates::*;
 
 pub struct Task {
     description: &'static str,
@@ -290,15 +290,14 @@ fn create_mount_location(_distro: &DistroFamily) -> Result<TaskStatus, String> {
 
 fn access_gpu_devices(_distro: &DistroFamily) -> Result<TaskStatus, String> {
     let rule_path = "/etc/udev/rules.d/99-lxc-gpu.rules";
-    let rule_content = "ACTION==\"add|change\", SUBSYSTEM==\"drm\", RUN+=\"/usr/bin/setfacl -m u:100000:rw $env{DEVNAME}\"\n";
 
     if let Ok(existing_content) = std::fs::read_to_string(rule_path) {
-        if existing_content == rule_content {
+        if existing_content == GPU_UDEV_RULE {
             return Ok(TaskStatus::JustChecked);
         }
     }
 
-    std::fs::write(rule_path, rule_content)
+    std::fs::write(rule_path, GPU_UDEV_RULE)
         .map_err(|e| format!("Failed to write udev rule to {}: {}", rule_path, e))?;
 
     // reload the udev rules - for immediate effect
@@ -328,36 +327,22 @@ fn access_gpu_devices(_distro: &DistroFamily) -> Result<TaskStatus, String> {
 
 fn auto_mount(_distro: &DistroFamily) -> Result<TaskStatus, String> {
     let udev_rule_path = "/etc/udev/rules.d/99-ignore-ppe.rules";
-    let udev_content = "SUBSYSTEM==\"block\", ENV{ID_FS_LABEL}==\"PPE\", ENV{UDISKS_IGNORE}=\"1\"\n";
-
     let mount_unit_path = "/etc/systemd/system/mnt-ppe.mount";
-    let mount_content = "[Unit]\n\
-                        Description=Mount PPE Drive\n\n\
-                        [Mount]\n\
-                        What=/dev/disk/by-label/PPE\n\
-                        Where=/mnt/ppe\n\
-                        Type=ext4\n\
-                        Options=defaults,noatime,exec\n";
-
     let automount_unit_path = "/etc/systemd/system/mnt-ppe.automount";
-    let automount_content = "[Unit]\n\
-                             Description=Automount PPE Drive\n\n\
-                             [Automount]\n\
-                             Where=/mnt/ppe\n";
 
-    let udev_ok = std::fs::read_to_string(udev_rule_path).unwrap_or_default() == udev_content;
-    let mount_ok = std::fs::read_to_string(mount_unit_path).unwrap_or_default() == mount_content;
-    let automount_ok = std::fs::read_to_string(automount_unit_path).unwrap_or_default() == automount_content;
+    let udev_ok = std::fs::read_to_string(udev_rule_path).unwrap_or_default() == IGNORE_PPE_UDEV_RULE;
+    let mount_ok = std::fs::read_to_string(mount_unit_path).unwrap_or_default() == MOUNT_UNIT;
+    let automount_ok = std::fs::read_to_string(automount_unit_path).unwrap_or_default() == AUTOMOUNT_UNIT;
 
     if udev_ok && mount_ok && automount_ok {
         return Ok(TaskStatus::JustChecked);
     }
 
-    std::fs::write(udev_rule_path, udev_content)
+    std::fs::write(udev_rule_path, IGNORE_PPE_UDEV_RULE)
         .map_err(|e| format!("Failed to write udev ignore rule: {}", e))?;
-    std::fs::write(mount_unit_path, mount_content)
+    std::fs::write(mount_unit_path, MOUNT_UNIT)
         .map_err(|e| format!("Failed to write mount unit: {}", e))?;
-    std::fs::write(automount_unit_path, automount_content)
+    std::fs::write(automount_unit_path, AUTOMOUNT_UNIT)
         .map_err(|e| format!("Failed to write automount unit: {}", e))?;
 
     // bypass automatic mounting to ~/media/
@@ -420,43 +405,14 @@ fn allow_unprivileged_mount(_distro: &DistroFamily) -> Result<TaskStatus, String
 
 fn create_intermediary_script(_distro: &DistroFamily) -> Result<TaskStatus, String> {
     let stub_path = "/usr/local/bin/ppe-launcher-stub";
-    
-    let stub_content = r#"#!/bin/bash
-
-notify_error() {
-    notify-send -u critical -i drive-removable-media "PPE Launcher" "$1"
-}
-
-sudo /bin/systemctl stop mnt-ppe.automount
-sudo /bin/systemctl stop mnt-ppe.mount
-sudo /bin/systemctl reset-failed mnt-ppe.automount 2>/dev/null || true
-sudo /bin/systemctl reset-failed mnt-ppe.mount 2>/dev/null || true
-
-if [ ! -e "/dev/disk/by-label/PPE" ]; then
-    notify_error "PPE drive not found! Please insert the external drive and try again."
-    exit 1
-fi
-
-sudo /bin/systemctl start mnt-ppe.automount
-
-SESSION_SCRIPT="/mnt/ppe/ppe-launcher.sh"
-
-if [ ! -f "$SESSION_SCRIPT" ]; then
-    notify_error "Session script (ppe-launcher.sh) not found on the drive!"
-    sudo /bin/systemctl stop mnt-ppe.automount
-    exit 1
-fi
-
-exec "$SESSION_SCRIPT"
-"#;
 
     if let Ok(existing_content) = std::fs::read_to_string(stub_path) {
-        if existing_content == stub_content {
+        if existing_content == LAUNCHER_STUB_SCRIPT {
             return Ok(TaskStatus::JustChecked);
         }
     }
 
-    std::fs::write(stub_path, stub_content)
+    std::fs::write(stub_path, LAUNCHER_STUB_SCRIPT)
         .map_err(|e| format!("Failed to write stub script to {}: {}", stub_path, e))?;
 
     // only r+x permissions for unprivileged users
@@ -475,23 +431,14 @@ exec "$SESSION_SCRIPT"
 
 fn link_desktop_shrtcut(_distro: &DistroFamily) -> Result<TaskStatus, String> {
     let desktop_path = "/usr/share/applications/ppe-launcher.desktop";
-    
-    let desktop_content = "[Desktop Entry]\n\
-                           Name=PPE Launcher\n\
-                           Comment=Launch the Portable Personal Environment\n\
-                           Exec=/usr/local/bin/ppe-launcher-stub\n\
-                           Icon=drive-removable-media\n\
-                           Terminal=false\n\
-                           Type=Application\n\
-                           Categories=Utility;System;\n";
 
     if let Ok(existing_content) = std::fs::read_to_string(desktop_path) {
-        if existing_content == desktop_content {
+        if existing_content == DESKTOP_ENTRY {
             return Ok(TaskStatus::JustChecked);
         }
     }
 
-    std::fs::write(desktop_path, desktop_content)
+    std::fs::write(desktop_path, DESKTOP_ENTRY)
         .map_err(|e| format!("Failed to write desktop entry to {}: {}", desktop_path, e))?;
 
     // ensure proper permissions

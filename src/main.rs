@@ -3,6 +3,7 @@ use crate::types::{DistroFamily};
 
 mod configuration;
 mod types;
+mod templates;
 
 fn initial_checks() -> (bool, DistroFamily){
     // unsafe is required due to making a direct C system call
