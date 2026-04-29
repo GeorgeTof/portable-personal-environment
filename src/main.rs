@@ -1,7 +1,9 @@
 use std::fs;
+use std::env;
 use crate::types::{DistroFamily};
 
 mod configuration;
+mod removal;
 mod types;
 mod templates;
 
@@ -43,11 +45,21 @@ fn main() {
         return;
     }
 
-    match configuration::configure(&host_distribution) {
-        Ok(result) => {
-            println!("{result}");
-            println!("Please close the terminal window and remove the external drive.");
-        },
-        Err(e) => eprintln!("Failed configuration due to error: {e}"),
+    let is_removal = env::args().any(|arg| arg == "--remove");
+
+    if is_removal {
+        match removal::remove_configuration(&host_distribution) {
+            Ok(result) => println!("{result}"),
+            Err(e) => eprintln!("Failed removal due to error: {e}"),
+        }
+    }
+    else {
+        match configuration::configure(&host_distribution) {
+            Ok(result) => {
+                println!("{result}");
+                println!("Please close the terminal window and remove the external drive.");
+            },
+            Err(e) => eprintln!("Failed configuration due to error: {e}"),
+        }
     }
 }
