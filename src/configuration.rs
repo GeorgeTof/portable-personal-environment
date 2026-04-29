@@ -52,6 +52,8 @@ pub fn configure(host_distribution: &DistroFamily) -> Result<String, String> {
     ];
 
     println!("Starting host configuration...\n");
+    
+    let mut modified_configurations = false;
 
     for (i, task) in tasks.iter().enumerate() {
         println!("[{}/{}] {}", i + 1, tasks.len(), task.description);
@@ -59,6 +61,7 @@ pub fn configure(host_distribution: &DistroFamily) -> Result<String, String> {
         match (task.action)(host_distribution) {
             Ok(TaskStatus::Configured) => {
                 println!("{:>75}", "[ DONE ]\n"); // todo: maybe add emojis / visual cue
+                modified_configurations = true;
             }
             Ok(TaskStatus::JustChecked) => {
                 println!("{:>75}", "[ ALREADY CONFIGURED ]\n");
@@ -72,7 +75,12 @@ pub fn configure(host_distribution: &DistroFamily) -> Result<String, String> {
         }
     }
 
-    Ok("Host configuration completed successfully!".to_string())
+    if modified_configurations{
+        Ok("Host configuration completed successfully!".to_string())
+    }
+    else {
+        Ok("Host configuration checked! Everything is already configured correctly!".to_string())
+    }
 }
 
 
