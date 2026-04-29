@@ -7,6 +7,13 @@ export const LoadingView = () => (
   </div>
 );
 
+export const StartingUpView = () => (
+  <div className="view-container">
+    <h2>Starting up the environment...</h2>
+    <div className="spinner"></div>
+  </div>
+);
+
 export const HostErrorView = () => (
   <div className="view-container">
     <h2>Host Configuration Error</h2>
@@ -24,10 +31,24 @@ export const EnvironmentActionView = ({ title, description, buttonText = "Create
   </div>
 );
 
-export const StartView = ({ onStart }) => (
+export const StartView = ({ onStart, errorMessage }) => (
   <div className="view-container">
+    {errorMessage && <div className="error-message">{errorMessage}</div>}
     <button className="btn start-btn" onClick={onStart}>
       START
     </button>
+  </div>
+);
+
+export const SetupUserView = () => (
+  <div className="view-container">
+    <h2>Initial Setup Required</h2>
+    <p>(TODO Configuration...)</p>
+  </div>
+);
+
+export const LauncherView = () => (
+  <div className="view-container">
+    <h2>Launcher</h2>
   </div>
 );

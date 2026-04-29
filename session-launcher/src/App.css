@@ -78,3 +78,14 @@ body, html, #root {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+.error-message {
+  background-color: rgba(243, 139, 168, 0.1);
+  color: #f38ba8;
+  padding: 1rem;
+  border: 1px solid #f38ba8;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  font-weight: bold;
+  max-width: 400px;
+}

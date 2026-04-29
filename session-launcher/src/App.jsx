@@ -3,13 +3,20 @@ import {
   checkHostConfig, 
   checkDriveConfiguration, 
   checkContainerIntegrity,
-  createEnvironment
+  createEnvironment,
+  startContainer,
+  checkContainerStarted,
+  checkContainerRuntimeIntegrity,
+  checkConfiguredForPersonalUse
 } from './api';
 import { 
-  LoadingView, 
+  LoadingView,
+  StartingUpView, 
   HostErrorView, 
-  EnvironmentActionView,
-  StartView 
+  EnvironmentActionView, 
+  StartView,
+  SetupUserView,
+  LauncherView
 } from './components/Views';
 import { Footer } from './components/Footer';
 import './App.css';
@@ -17,6 +24,7 @@ import './App.css';
 function App() {
   const [viewState, setViewState] = useState('loading'); // loading, hostError, missingEnv, corruptEnv, ready, creationFailed
   const [footerState, setFooterState] = useState('none'); // none, unmount, stop
+  const [startError, setStartError] = useState(null);
 
   useEffect(() => {
     runStartupChecks();
@@ -63,19 +71,61 @@ function App() {
     }
   };
 
-  const handleStart = () => {
-    console.log("Start button pressed! (To be implemented)");
-    // Todo: transition to app grid
+  const handleStart = async () => {
+    setStartError(null);
+    setViewState('startingUp');
+    setFooterState('stop'); // Immediately switch footer to stop
+
+    if (!(await startContainer())) {
+      setStartError("Failed to issue the start command.");
+      setViewState('ready');
+      setFooterState('unmount');
+      return;
+    }
+    
+    if (!(await checkContainerStarted())) {
+      setStartError("Container failed to initialize in time.");
+      setViewState('ready');
+      setFooterState('unmount');
+      return;
+    }
+    
+    if (!(await checkContainerRuntimeIntegrity())) {
+      setStartError("Container runtime integrity check failed.");
+      setViewState('ready');
+      setFooterState('unmount');
+      return;
+    }
+    
+    if (!(await checkConfiguredForPersonalUse())) {
+      setViewState('setupUser');
+      // keep footer state as 'stop' since the container is running
+      return;
+    }
+    
+    setViewState('launcher');
   };
 
   const handleUnmount = () => {
-    console.log("Unmounting drive... (Trigger workaround script and close app)");
+    console.log("Unmounting drive... (TODO workaround script and close app)");
   };
+
+  const handleStop = () => {
+    console.log("Stopping container... (API call to be implemented)");
+    // TODO: rust command that tries a clean approach with -t <seconds> timeout first, then force it with -K
+    // maybe if error, have a popup with the error message and return OR give the user there the option ot force kill the container
+    setStartError(null);
+    setViewState('ready');
+    setFooterState('unmount');
+  };
+
 
   const renderMainView = () => {
     switch (viewState) {
       case 'loading': 
         return <LoadingView />;
+      case 'startingUp': 
+        return <StartingUpView />;
       case 'hostError': 
         return <HostErrorView />;
       case 'missingEnv': 
@@ -104,7 +154,11 @@ function App() {
           />
         );
       case 'ready': 
-        return <StartView onStart={handleStart} />;
+        return <StartView onStart={handleStart} errorMessage={startError} />;
+      case 'setupUser':
+        return <SetupUserView />;
+      case 'launcher':
+        return <LauncherView />;
       default: 
         return null;
     }
@@ -119,6 +173,7 @@ function App() {
       <Footer 
         actionState={footerState} 
         onUnmount={handleUnmount} 
+        onStop={handleStop}
       />
     </div>
   );

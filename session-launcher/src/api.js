@@ -12,10 +12,30 @@ export const checkDriveConfiguration = async () => {
 
 export const checkContainerIntegrity = async () => {
   await delay(500);
-  return false;
+  return true;
 };
 
 export const createEnvironment = async () => {
   await delay(1500);
-  return false; 
+  return true; 
+};
+
+export const startContainer = async () => { 
+  await delay(500); 
+  return true;
+};
+
+export const checkContainerStarted = async () => { 
+  await delay(500); 
+  return true;
+};
+
+export const checkContainerRuntimeIntegrity = async () => { 
+  await delay(500); 
+  return true;
+};
+
+export const checkConfiguredForPersonalUse = async () => { 
+  await delay(500); 
+  return true;
 };
