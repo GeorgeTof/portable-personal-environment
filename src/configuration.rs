@@ -46,7 +46,7 @@ pub fn configure(host_distribution: &DistroFamily) -> Result<String, String> {
             action: create_intermediary_script 
         },
         Task { 
-            description: "TODO", 
+            description: "Create desktop entry for the launcher", 
             action: link_desktop_shrtcut 
         },
     ];
@@ -466,5 +466,44 @@ exec "$SESSION_SCRIPT"
 }
 
 fn link_desktop_shrtcut(_distro: &DistroFamily) -> Result<TaskStatus, String> {
-    Err("NOT IMPLEMENTED.".to_string())
+    let desktop_path = "/usr/share/applications/ppe-launcher.desktop";
+    
+    let desktop_content = "[Desktop Entry]\n\
+                           Name=PPE Launcher\n\
+                           Comment=Launch the Portable Personal Environment\n\
+                           Exec=/usr/local/bin/ppe-launcher-stub\n\
+                           Icon=drive-removable-media\n\
+                           Terminal=false\n\
+                           Type=Application\n\
+                           Categories=Utility;System;\n";
+
+    if let Ok(existing_content) = std::fs::read_to_string(desktop_path) {
+        if existing_content == desktop_content {
+            return Ok(TaskStatus::JustChecked);
+        }
+    }
+
+    std::fs::write(desktop_path, desktop_content)
+        .map_err(|e| format!("Failed to write desktop entry to {}: {}", desktop_path, e))?;
+
+    // ensure proper permissions
+    let chmod_status = Command::new("chmod")
+        .arg("644")
+        .arg(desktop_path)
+        .status()
+        .map_err(|e| format!("Failed to set permissions on desktop entry: {}", e))?;
+
+    if !chmod_status.success() {
+        return Err("Failed to set strict permissions on desktop entry".to_string());
+    }
+
+    // tell the desktop environment to refresh its application list.
+    // ignore the result because some minimal window managers might not have the command installed
+    let _ = Command::new("update-desktop-database")
+        .arg("/usr/share/applications")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+
+    Ok(TaskStatus::Configured)
 }
