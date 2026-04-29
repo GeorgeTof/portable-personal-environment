@@ -1,50 +1,126 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+import React, { useState, useEffect } from 'react';
+import { 
+  checkHostConfig, 
+  checkDriveConfiguration, 
+  checkContainerIntegrity,
+  createEnvironment
+} from './api';
+import { 
+  LoadingView, 
+  HostErrorView, 
+  EnvironmentActionView,
+  StartView 
+} from './components/Views';
+import { Footer } from './components/Footer';
+import './App.css';
 
 function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+  const [viewState, setViewState] = useState('loading'); // loading, hostError, missingEnv, corruptEnv, ready, creationFailed
+  const [footerState, setFooterState] = useState('none'); // none, unmount, stop
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
+  useEffect(() => {
+    runStartupChecks();
+  }, []);
+
+  const runStartupChecks = async () => {
+    setViewState('loading');
+    setFooterState('none');
+
+    const hostOk = await checkHostConfig();
+    if (!hostOk) {
+      setViewState('hostError');
+      setFooterState('unmount');
+      return;
+    }
+
+    const driveOk = await checkDriveConfiguration();
+    if (!driveOk) {
+      setViewState('missingEnv');
+      setFooterState('unmount'); 
+      return;
+    }
+
+    const containerOk = await checkContainerIntegrity();
+    if (!containerOk) {
+      setViewState('corruptEnv');
+      setFooterState('unmount');
+      return;
+    }
+
+    setViewState('ready');
+    setFooterState('unmount');
+  };
+
+  const handleCreateEnvironment = async () => {
+    setViewState('loading');
+    const success = await createEnvironment();
+    if (success) {
+      runStartupChecks(); 
+    }
+    else {
+      setViewState('creationFailed');
+      setFooterState('unmount');
+    }
+  };
+
+  const handleStart = () => {
+    console.log("Start button pressed! (To be implemented)");
+    // Todo: transition to app grid
+  };
+
+  const handleUnmount = () => {
+    console.log("Unmounting drive... (Trigger workaround script and close app)");
+  };
+
+  const renderMainView = () => {
+    switch (viewState) {
+      case 'loading': 
+        return <LoadingView />;
+      case 'hostError': 
+        return <HostErrorView />;
+      case 'missingEnv': 
+        return (
+          <EnvironmentActionView 
+            title="Environment Not Found"
+            description="You don't have a personal environment."
+            onAction={handleCreateEnvironment}
+          />
+        );
+      case 'corruptEnv': 
+        return (
+          <EnvironmentActionView 
+            title="Environment Corrupted"
+            description="Your environment is corrupt. Please create a new one."
+            onAction={handleCreateEnvironment}
+          />
+        );
+      case 'creationFailed':
+        return (
+          <EnvironmentActionView 
+            title="Creation Failed"
+            description="An error occurred while creating the environment. Please try again."
+            buttonText="Try Again"
+            onAction={handleCreateEnvironment}
+          />
+        );
+      case 'ready': 
+        return <StartView onStart={handleStart} />;
+      default: 
+        return null;
+    }
+  };
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
-
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
+    <div className="app-layout">
+      <main className="main-container">
+        {renderMainView()}
+      </main>
+      
+      <Footer 
+        actionState={footerState} 
+        onUnmount={handleUnmount} 
+      />
+    </div>
   );
 }
 
