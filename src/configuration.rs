@@ -50,7 +50,7 @@ pub fn configure(host_distribution: &DistroFamily) -> Result<String, String> {
 
         match (task.action)(host_distribution) {
             Ok(TaskStatus::ActionCompleted) => {
-                println!("{:>75}", "[ DONE ]\n"); // todo: maybe add emojis / visual cue
+                println!("{:>75}", "[ DONE ]\n");
                 modified_configurations = true;
             }
             Ok(TaskStatus::JustChecked) => {
@@ -74,7 +74,7 @@ pub fn configure(host_distribution: &DistroFamily) -> Result<String, String> {
 }
 
 
-fn install_prerequisites(distro: &DistroFamily) -> Result<TaskStatus, String> { // optional todo : have some sort of real time feedback during the long instalation
+fn install_prerequisites(distro: &DistroFamily) -> Result<TaskStatus, String> {
     let required_packages = vec!["lxc", "lxc-utils", "lxc-templates", "uidmap", "acl"];
     let mut installed = Vec::new();
     let mut missing = Vec::new();
@@ -92,7 +92,7 @@ fn install_prerequisites(distro: &DistroFamily) -> Result<TaskStatus, String> { 
         return Ok(TaskStatus::JustChecked);
     }
 
-    print!("\n  -> Starting installation of: {} ...", missing.join(", "));
+    println!("\n  -> Starting installation of: {} ...", missing.join(", "));
     io::stdout().flush().map_err(|e| e.to_string())?;
 
     match distro {
@@ -125,7 +125,7 @@ fn check_debian_prerequisites<'a>(packages: &[&'a str], installed: &mut Vec<&'a 
 }
 
 fn install_debian_prerequisites(missing: &[&str]) -> Result<(), String> {
-    // update apt cache first silently
+    println!("     Updating apt cache ...");
     let _ = Command::new("apt-get")
         .arg("update")
         .stdout(Stdio::null())
@@ -139,6 +139,7 @@ fn install_debian_prerequisites(missing: &[&str]) -> Result<(), String> {
         .arg("-y");
 
     for pkg in missing {
+        println!("     Installing {} ...", pkg);
         install_cmd.arg(pkg);
     }
 
