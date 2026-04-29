@@ -31,7 +31,16 @@ fn initial_checks() -> (bool, DistroFamily){
 
 fn main() {
     println!("Welcome to the host configuration for the Portable Personal Environment!\n\n");
+    
+    let is_help = env::args().any(|arg| arg == "--help") || env::args().any(|arg| arg == "-h");
+    if is_help {
+        println!("Simply run the script as sudo to configure the host machine or check its configuration");
+        println!("     --remove   Remove the PPE configuration from the host");
+        println!(" -h, --help     Show this help menu");
+        return;
+    }
 
+    
     let (is_root, host_distribution) = initial_checks();
 
     println!("The detected distribution is based on {:?}", host_distribution);
