@@ -84,7 +84,7 @@ export const SetupUserView = ({ onSubmit }) => {
       </div>
 
       <button className="btn primary" onClick={handleSubmit}>
-        Create Linux User
+        Create User
       </button>
     </div>
   );
