@@ -28,3 +28,13 @@ impl DistroFamily {
         }
     }
 }
+
+pub enum TaskStatus {
+    ActionCompleted,
+    JustChecked,
+}
+
+pub struct Task {
+    pub description: &'static str,
+    pub action: fn(&DistroFamily) -> Result<TaskStatus, String>,
+}

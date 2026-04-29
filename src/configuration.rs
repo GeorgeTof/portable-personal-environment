@@ -2,18 +2,8 @@ use std::io::{self, Write};
 use std::process::{Command, Stdio};
 use std::os::unix::fs::MetadataExt; // heavy import
 
-use crate::types::{DistroFamily};
+use crate::types::{DistroFamily, Task, TaskStatus};
 use crate::templates::*;
-
-pub struct Task {
-    description: &'static str,
-    action: fn(&DistroFamily) -> Result<TaskStatus, String>, 
-}
-
-pub enum TaskStatus {
-    Configured,
-    JustChecked,
-}
 
 pub fn configure(host_distribution: &DistroFamily) -> Result<String, String> {
     let tasks = vec![
@@ -59,7 +49,7 @@ pub fn configure(host_distribution: &DistroFamily) -> Result<String, String> {
         println!("[{}/{}] {}", i + 1, tasks.len(), task.description);
 
         match (task.action)(host_distribution) {
-            Ok(TaskStatus::Configured) => {
+            Ok(TaskStatus::ActionCompleted) => {
                 println!("{:>75}", "[ DONE ]\n"); // todo: maybe add emojis / visual cue
                 modified_configurations = true;
             }
@@ -110,7 +100,7 @@ fn install_prerequisites(distro: &DistroFamily) -> Result<TaskStatus, String> { 
         _ => return Err("Distribution family packet manager not supported".to_string()),
     }
 
-    Ok(TaskStatus::Configured)
+    Ok(TaskStatus::ActionCompleted)
 }
 
 fn check_debian_prerequisites<'a>(packages: &[&'a str], installed: &mut Vec<&'a str>, missing: &mut Vec<&'a str>) -> Result<(), String> {
@@ -190,7 +180,7 @@ fn allow_veth_connections(_distro: &DistroFamily) -> Result<TaskStatus, String> 
     writeln!(file, "{}", expected_line)
         .map_err(|e| format!("Failed to write to {}: {}", usernet_path, e))?;
 
-    Ok(TaskStatus::Configured)
+    Ok(TaskStatus::ActionCompleted)
 }
 
 fn create_mount_location(_distro: &DistroFamily) -> Result<TaskStatus, String> {
@@ -284,7 +274,7 @@ fn create_mount_location(_distro: &DistroFamily) -> Result<TaskStatus, String> {
     if already_configured {
         Ok(TaskStatus::JustChecked)
     } else {
-        Ok(TaskStatus::Configured)
+        Ok(TaskStatus::ActionCompleted)
     }
 }
 
@@ -322,7 +312,7 @@ fn access_gpu_devices(_distro: &DistroFamily) -> Result<TaskStatus, String> {
         return Err("Failed to trigger udev rules".to_string());
     }
 
-    Ok(TaskStatus::Configured)
+    Ok(TaskStatus::ActionCompleted)
 }
 
 fn auto_mount(_distro: &DistroFamily) -> Result<TaskStatus, String> {
@@ -363,7 +353,7 @@ fn auto_mount(_distro: &DistroFamily) -> Result<TaskStatus, String> {
         .status()
         .map_err(|e| format!("Failed to execute systemctl daemon-reload: {}", e))?;
 
-    Ok(TaskStatus::Configured)
+    Ok(TaskStatus::ActionCompleted)
 }
 
 fn allow_unprivileged_mount(_distro: &DistroFamily) -> Result<TaskStatus, String> {
@@ -400,7 +390,7 @@ fn allow_unprivileged_mount(_distro: &DistroFamily) -> Result<TaskStatus, String
         return Err("Failed to set strict permissions on sudoers file".to_string());
     }
 
-    Ok(TaskStatus::Configured)
+    Ok(TaskStatus::ActionCompleted)
 }
 
 fn create_intermediary_script(_distro: &DistroFamily) -> Result<TaskStatus, String> {
@@ -426,7 +416,7 @@ fn create_intermediary_script(_distro: &DistroFamily) -> Result<TaskStatus, Stri
         return Err("Failed to make stub script executable".to_string());
     }
 
-    Ok(TaskStatus::Configured)
+    Ok(TaskStatus::ActionCompleted)
 }
 
 fn link_desktop_shrtcut(_distro: &DistroFamily) -> Result<TaskStatus, String> {
@@ -460,5 +450,5 @@ fn link_desktop_shrtcut(_distro: &DistroFamily) -> Result<TaskStatus, String> {
         .stderr(Stdio::null())
         .status();
 
-    Ok(TaskStatus::Configured)
+    Ok(TaskStatus::ActionCompleted)
 }
