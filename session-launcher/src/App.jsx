@@ -7,7 +7,8 @@ import {
   startContainer,
   checkContainerStarted,
   checkContainerRuntimeIntegrity,
-  checkConfiguredForPersonalUse
+  checkConfiguredForPersonalUse,
+  configureUser
 } from './api';
 import { 
   LoadingView,
@@ -16,7 +17,7 @@ import {
   EnvironmentActionView, 
   StartView,
   SetupUserView,
-  LauncherView
+  LauncherView,
 } from './components/Views';
 import { Footer } from './components/Footer';
 import './App.css';
@@ -119,6 +120,22 @@ function App() {
     setFooterState('unmount');
   };
 
+  const handleConfigureUser = async (username, password) => {
+    setViewState('loading');
+    const success = await configureUser(username, password);
+    
+    if (success) {
+      setViewState('launcher');
+    } else {
+      alert("Backend Error: Failed to configure the Linux user. Please try again.");
+      setViewState('setupUser');
+    }
+  };
+
+  const handleRefresh = () => {
+    console.log("TODO Refresh button pressed!");
+  };
+
 
   const renderMainView = () => {
     switch (viewState) {
@@ -156,7 +173,7 @@ function App() {
       case 'ready': 
         return <StartView onStart={handleStart} errorMessage={startError} />;
       case 'setupUser':
-        return <SetupUserView />;
+        return <SetupUserView onSubmit={handleConfigureUser} />;
       case 'launcher':
         return <LauncherView />;
       default: 
@@ -174,6 +191,8 @@ function App() {
         actionState={footerState} 
         onUnmount={handleUnmount} 
         onStop={handleStop}
+        showRefresh={viewState === 'launcher'}
+        onRefresh={handleRefresh}
       />
     </div>
   );

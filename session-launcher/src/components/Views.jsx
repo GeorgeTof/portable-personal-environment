@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 export const LoadingView = () => (
   <div className="view-container">
@@ -40,12 +40,55 @@ export const StartView = ({ onStart, errorMessage }) => (
   </div>
 );
 
-export const SetupUserView = () => (
-  <div className="view-container">
-    <h2>Initial Setup Required</h2>
-    <p>(TODO Configuration...)</p>
-  </div>
-);
+export const SetupUserView = ({ onSubmit }) => {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+
+  const handleSubmit = () => {
+    if (!username || !password || !confirmPassword) {
+      alert("Error: All fields must be filled out.");
+      return;
+    }
+    if (password !== confirmPassword) {
+      alert("Error: Passwords do not match.");
+      return;
+    }
+    onSubmit(username, password);
+  };
+
+  return (
+    <div className="view-container">
+      <h2>Initial Setup Required</h2>
+      <p>Please configure your Linux user</p>
+      
+      <div className="form-group">
+        <input 
+          type="text" 
+          placeholder="Username" 
+          value={username} 
+          onChange={e => setUsername(e.target.value)} 
+        />
+        <input 
+          type="password" 
+          placeholder="Password" 
+          value={password} 
+          onChange={e => setPassword(e.target.value)} 
+        />
+        <input 
+          type="password" 
+          placeholder="Repeat Password" 
+          value={confirmPassword} 
+          onChange={e => setConfirmPassword(e.target.value)} 
+        />
+      </div>
+
+      <button className="btn primary" onClick={handleSubmit}>
+        Create Linux User
+      </button>
+    </div>
+  );
+};
 
 export const LauncherView = () => (
   <div className="view-container">

@@ -37,5 +37,10 @@ export const checkContainerRuntimeIntegrity = async () => {
 
 export const checkConfiguredForPersonalUse = async () => { 
   await delay(500); 
-  return true;
+  return false;
+};
+
+export const configureUser = async (username, password) => {
+  await delay(500); 
+  return false;
 };

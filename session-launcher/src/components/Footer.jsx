@@ -1,6 +1,6 @@
 import React from 'react';
 
-export const Footer = ({ actionState, onUnmount, onStop }) => {
+export const Footer = ({ actionState, onUnmount, onStop, showRefresh, onRefresh }) => {
   return (
     <div className="footer">
       <div className="footer-left">
@@ -16,7 +16,11 @@ export const Footer = ({ actionState, onUnmount, onStop }) => {
         )}
       </div>
       <div className="footer-right">
-        {/* Future utilities like settings or status indicators can go here */}
+        {showRefresh && (
+          <button className="btn" onClick={onRefresh} style={{ backgroundColor: '#45475a', color: '#cdd6f4' }}>
+            Refresh
+          </button>
+        )}
       </div>
     </div>
   );
