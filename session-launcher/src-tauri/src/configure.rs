@@ -24,6 +24,10 @@ pub async fn create_environment() -> (bool, Option<String>) {
         return (false, Some(format!("Failed to create lxc-data directory: {}", e)));
     }
 
+    if let Err(e) = configure_acls(lxc_data_dir) {
+        return (false, Some(format!("Failed to set traversal ACLs on lxc-data: {}", e)));
+    }
+
     if let Err(e) = fs::write(config_path, PPE_DEFAULT_CONF) {
         return (false, Some(format!("Failed to write ppe-default.conf: {}", e)));
     }
@@ -52,6 +56,20 @@ pub fn configure_user(_username: String, _password: String) -> (bool, Option<Str
 }
 
 
+pub fn configure_acls(path: &str) -> Result<(), String> {
+    let status = Command::new("setfacl")
+        .arg("-m")
+        .arg("u:100000:x")
+        .arg(path)
+        .status()
+        .map_err(|e| format!("Failed to execute setfacl on {}: {}", path, e))?;
+
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!("setfacl returned non-zero status for {}", path))
+    }
+}
 
 fn get_or_find_terminal() -> Option<String> {
     let mut global_term = HOST_TERMINAL.lock().unwrap();

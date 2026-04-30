@@ -3,6 +3,8 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
+use crate::configure::configure_acls;
+
 #[tauri::command]
 pub fn check_host_config() -> (bool, Option<String>) {
     let user = match env::var("USER") {
@@ -113,9 +115,17 @@ pub fn configure_wayland_access() -> (bool, Option<String>) {
 
 #[tauri::command]
 pub fn check_drive_configuration() -> (bool, Option<String>) {
+    let mount_dir = "/mnt/ppe";
+    let lxc_data_dir = "/mnt/ppe/lxc-data";
     let container_dir = "/mnt/ppe/lxc-data/personal-container";
     let config_file = format!("{}/config", container_dir);
     let rootfs_dir = format!("{}/rootfs", container_dir);
+
+    if Path::new(mount_dir).exists() && !has_acl(mount_dir, "100000", "--x") {
+        if let Err(e) = configure_acls(mount_dir) {
+            return (false, Some(format!("Auto-configuration failed for mount root ACLs: {}", e)));
+        }
+    }
 
     if !Path::new(container_dir).is_dir() {
         return (false, None);
@@ -127,6 +137,12 @@ pub fn check_drive_configuration() -> (bool, Option<String>) {
 
     if !Path::new(&rootfs_dir).is_dir() {
         return (false, Some(format!("Container root filesystem missing: {}", rootfs_dir)));
+    }
+
+    if !has_acl(lxc_data_dir, "100000", "--x") {
+        if let Err(e) = configure_acls(lxc_data_dir) {
+            return (false, Some(format!("Auto-configuration failed for lxc-data ACLs: {}", e)));
+        }
     }
 
     (true, None)
