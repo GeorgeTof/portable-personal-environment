@@ -59,6 +59,7 @@ pub fn check_host_config() -> (bool, Option<String>) {
     configure_wayland_access()
 }
 
+// #todo move to configure.rs
 pub fn configure_wayland_access() -> (bool, Option<String>) {
     let runtime_dir = match env::var("XDG_RUNTIME_DIR") {
         Ok(dir) => dir,

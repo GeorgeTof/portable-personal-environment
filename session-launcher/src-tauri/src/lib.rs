@@ -1,6 +1,7 @@
 mod checks;
 mod configure;
 mod session;
+mod templates;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
