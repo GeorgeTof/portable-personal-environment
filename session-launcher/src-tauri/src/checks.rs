@@ -112,11 +112,47 @@ pub fn configure_wayland_access() -> (bool, Option<String>) {
 
 #[tauri::command]
 pub fn check_drive_configuration() -> (bool, Option<String>) {
+    let container_dir = "/mnt/ppe/lxc-data/personal-container";
+    let config_file = format!("{}/config", container_dir);
+    let rootfs_dir = format!("{}/rootfs", container_dir);
+
+    if !Path::new(container_dir).is_dir() {
+        return (false, None);
+    }
+
+    if !Path::new(&config_file).is_file() {
+        return (false, Some(format!("Container configuration file missing: {}", config_file)));
+    }
+
+    if !Path::new(&rootfs_dir).is_dir() {
+        return (false, Some(format!("Container root filesystem missing: {}", rootfs_dir)));
+    }
+
     (true, None)
 }
 
 #[tauri::command]
 pub fn check_container_integrity() -> (bool, Option<String>) {
+    let rootfs_dir = "/mnt/ppe/lxc-data/personal-container/rootfs";
+
+    let essential_files = [
+        "sbin/init",   // primary boot executable (often a symlink to systemd)
+        "bin/sh",      // standard shell required for basic scripts
+        "etc/passwd",  // fundamental user database
+    ];
+
+    for file in essential_files.iter() {
+        let full_path = format!("{}/{}", rootfs_dir, file);
+        
+        // Note: .exists() automatically resolves and follows symlinks, 
+        if !Path::new(&full_path).exists() {
+            return (false, Some(format!(
+                "Container integrity compromised: Essential file '{}' is missing.", 
+                full_path
+            )));
+        }
+    }
+
     (true, None)
 }
 
