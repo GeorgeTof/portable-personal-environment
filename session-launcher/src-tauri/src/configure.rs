@@ -2,8 +2,10 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 use std::sync::Mutex;
+use std::env;
 
 use crate::templates::PPE_DEFAULT_CONF;
+use crate::checks::has_acl;
 
 // TODO: move to better position, maybe session.rs
 pub static HOST_TERMINAL: Mutex<Option<String>> = Mutex::new(None);
@@ -56,6 +58,58 @@ pub fn configure_user(_username: String, _password: String) -> (bool, Option<Str
 }
 
 
+
+pub fn configure_wayland_access() -> (bool, Option<String>) {
+    let runtime_dir = match env::var("XDG_RUNTIME_DIR") {
+        Ok(dir) => dir,
+        Err(_) => {
+            // fallback to find the runtime directory
+            match Command::new("id").arg("-u").output() {
+                Ok(out) if out.status.success() => {
+                    let uid = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                    format!("/run/user/{}", uid)
+                }
+                _ => return (false, Some("Failed to determine current user ID (id -u failed).".to_string())),
+            }
+        }
+    };
+    let wayland_display = std::env::var("WAYLAND_DISPLAY").unwrap_or_else(|_| "wayland-0".to_string());
+    let wayland_socket = format!("{}/{}", runtime_dir, wayland_display);
+
+    if !Path::new(&wayland_socket).exists() {
+        // (maybe add X11 logic as fallback)
+        return (false, Some(format!("Wayland socket not found at {}", wayland_socket)));
+    }
+
+    // grant container root traversal access to the runtime directory (if not already set)
+    if !has_acl(&runtime_dir, "100000", "--x") {
+        let status_dir = Command::new("setfacl")
+            .arg("-m")
+            .arg("u:100000:x")
+            .arg(&runtime_dir)
+            .status();
+
+        if !status_dir.map(|s| s.success()).unwrap_or(false) {
+            return (false, Some(format!("Failed to set traversal ACLs on {}", runtime_dir)));
+        }
+    }
+
+    // grant container root read/write access to the Wayland socket itself (if not already set)
+    if !has_acl(&wayland_socket, "100000", "rw-") {
+        let status_sock = Command::new("setfacl")
+            .arg("-m")
+            .arg("u:100000:rw")
+            .arg(&wayland_socket)
+            .status();
+
+        if !status_sock.map(|s| s.success()).unwrap_or(false) {
+            return (false, Some(format!("Failed to set read/write ACLs on {}", wayland_socket)));
+        }
+    }
+
+    (true, None)
+}
+
 pub fn configure_acls(path: &str) -> Result<(), String> {
     let status = Command::new("setfacl")
         .arg("-m")
@@ -70,6 +124,8 @@ pub fn configure_acls(path: &str) -> Result<(), String> {
         Err(format!("setfacl returned non-zero status for {}", path))
     }
 }
+
+
 
 fn get_or_find_terminal() -> Option<String> {
     let mut global_term = HOST_TERMINAL.lock().unwrap();

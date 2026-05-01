@@ -3,7 +3,7 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
-use crate::configure::configure_acls;
+use crate::configure::{configure_acls, configure_wayland_access};
 
 #[tauri::command]
 pub fn check_host_config() -> (bool, Option<String>) {
@@ -30,7 +30,7 @@ pub fn check_host_config() -> (bool, Option<String>) {
         return (false, Some(format!("Network permissions for '{}' not found in /etc/lxc/lxc-usernet.", user)));
     }
 
-    // #pls-double-check - for discrete gpu
+    // #todo pls-double-check - for discrete gpu
     let dri_path = "/dev/dri";
     if Path::new(dri_path).exists() {
         if let Ok(entries) = fs::read_dir(dri_path) {
@@ -59,58 +59,6 @@ pub fn check_host_config() -> (bool, Option<String>) {
         }
     }
     configure_wayland_access()
-}
-
-// #todo move to configure.rs
-pub fn configure_wayland_access() -> (bool, Option<String>) {
-    let runtime_dir = match env::var("XDG_RUNTIME_DIR") {
-        Ok(dir) => dir,
-        Err(_) => {
-            // fallback to find the runtime directory
-            match Command::new("id").arg("-u").output() {
-                Ok(out) if out.status.success() => {
-                    let uid = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                    format!("/run/user/{}", uid)
-                }
-                _ => return (false, Some("Failed to determine current user ID (id -u failed).".to_string())),
-            }
-        }
-    };
-    let wayland_display = std::env::var("WAYLAND_DISPLAY").unwrap_or_else(|_| "wayland-0".to_string());
-    let wayland_socket = format!("{}/{}", runtime_dir, wayland_display);
-
-    if !Path::new(&wayland_socket).exists() {
-        // (maybe add X11 logic as fallback)
-        return (false, Some(format!("Wayland socket not found at {}", wayland_socket)));
-    }
-
-    // grant container root traversal access to the runtime directory (if not already set)
-    if !has_acl(&runtime_dir, "100000", "--x") {
-        let status_dir = Command::new("setfacl")
-            .arg("-m")
-            .arg("u:100000:x")
-            .arg(&runtime_dir)
-            .status();
-
-        if !status_dir.map(|s| s.success()).unwrap_or(false) {
-            return (false, Some(format!("Failed to set traversal ACLs on {}", runtime_dir)));
-        }
-    }
-
-    // grant container root read/write access to the Wayland socket itself (if not already set)
-    if !has_acl(&wayland_socket, "100000", "rw-") {
-        let status_sock = Command::new("setfacl")
-            .arg("-m")
-            .arg("u:100000:rw")
-            .arg(&wayland_socket)
-            .status();
-
-        if !status_sock.map(|s| s.success()).unwrap_or(false) {
-            return (false, Some(format!("Failed to set read/write ACLs on {}", wayland_socket)));
-        }
-    }
-
-    (true, None)
 }
 
 #[tauri::command]
@@ -189,6 +137,18 @@ pub fn check_configured_for_personal_use() -> (bool, Option<String>) {
 }
 
 
+pub fn has_acl(path: &str, uid: &str, permissions_substring: &str) -> bool {
+    // getfacl -n outputs numeric UIDs, making it safe to parse
+    match Command::new("getfacl").arg("-n").arg(path).output() {
+        Ok(output) if output.status.success() => {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let expected_rule = format!("user:{}:{}", uid, permissions_substring);
+            stdout.contains(&expected_rule)
+        }
+        _ => false,
+    }
+}
+
 
 fn command_exists(command: &str) -> bool {
     Command::new("which")
@@ -211,17 +171,5 @@ fn file_contains_string(path: &str, search: &str) -> bool {
         contents.contains(search)
     } else {
         false
-    }
-}
-
-fn has_acl(path: &str, uid: &str, permissions_substring: &str) -> bool {
-    // getfacl -n outputs numeric UIDs, making it safe to parse
-    match Command::new("getfacl").arg("-n").arg(path).output() {
-        Ok(output) if output.status.success() => {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            let expected_rule = format!("user:{}:{}", uid, permissions_substring);
-            stdout.contains(&expected_rule)
-        }
-        _ => false,
     }
 }
