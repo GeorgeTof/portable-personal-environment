@@ -22,9 +22,9 @@ import {
   EnvironmentActionView, 
   StartView,
   SetupUserView,
-  LauncherView,
 } from './components/Views';
 import { Footer } from './components/Footer';
+import { LauncherView } from './components/Launcher';
 import './App.css';
 
 function App() {

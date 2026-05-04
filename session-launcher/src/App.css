@@ -111,3 +111,90 @@ body, html, #root {
 .form-group input:focus {
   outline: 2px solid #89b4fa;
 }
+
+
+/* Launcher Grid */
+.app-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  padding: 20px;
+  align-items: flex-start;
+  justify-content: flex-start;
+}
+
+.app-icon-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 90px;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 8px;
+  transition: background-color 0.2s;
+}
+
+.app-icon-container:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.app-icon-image {
+  width: 64px;
+  height: 64px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.app-icon-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* Fallback styling for the built-in Terminal placeholder */
+.builtin-icon {
+  width: 100%;
+  height: 100%;
+  background-color: #313244;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: bold;
+  color: #cdd6f4;
+}
+
+.app-icon-name {
+  font-size: 13px;
+  text-align: center;
+  word-wrap: break-word;
+  color: #cdd6f4;
+  line-height: 1.2;
+}
+
+/* Custom Context Menu */
+.context-menu {
+  position: absolute;
+  background-color: #1e1e2e;
+  border: 1px solid #313244;
+  border-radius: 6px;
+  padding: 4px 0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+  min-width: 200px;
+}
+
+.context-menu-item {
+  padding: 10px 16px;
+  font-size: 14px;
+  color: #cdd6f4;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.context-menu-item:hover {
+  background-color: #313244;
+}

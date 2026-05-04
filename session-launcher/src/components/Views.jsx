@@ -117,9 +117,3 @@ export const SetupUserView = ({ onSubmit }) => {
     </div>
   );
 };
-
-export const LauncherView = () => (
-  <div className="view-container">
-    <h2>Launcher</h2>
-  </div>
-);
