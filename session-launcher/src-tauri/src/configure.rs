@@ -3,9 +3,8 @@ use std::path::Path;
 use std::process::Command;
 
 use crate::templates::PPE_DEFAULT_CONF;
-use crate::terminal::TerminalManager;
 use crate::checks::has_acl;
-use crate::utils::get_wayland_socket_info;
+use crate::utils::{get_wayland_socket_info, TerminalManager};
 
 #[tauri::command]
 // return must be wrapped in result for async command with borrowed parameter, but is deserialized the same in frontend

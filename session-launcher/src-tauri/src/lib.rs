@@ -2,10 +2,9 @@ mod checks;
 mod configure;
 mod session;
 mod templates;
-mod terminal;
 mod utils;
 
-use terminal::TerminalManager;
+use utils::TerminalManager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
