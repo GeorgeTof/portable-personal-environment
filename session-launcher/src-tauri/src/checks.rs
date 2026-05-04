@@ -128,6 +128,7 @@ pub fn check_container_started() -> (bool, Option<String>) {
 
 #[tauri::command]
 pub fn check_container_runtime_integrity() -> (bool, Option<String>) {
+    // TODO
     (true, None)
 }
 

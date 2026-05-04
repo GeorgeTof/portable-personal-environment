@@ -2,11 +2,15 @@ mod checks;
 mod configure;
 mod session;
 mod templates;
+mod terminal;
+
+use terminal::TerminalManager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .manage(TerminalManager::new())
         .invoke_handler(tauri::generate_handler![
             checks::check_host_config,
             checks::check_drive_configuration,
