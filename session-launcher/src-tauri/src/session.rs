@@ -3,9 +3,23 @@ use std::time::{Duration, Instant};
 use std::thread;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
+use std::sync::Mutex;
 
 use crate::templates::UNMOUNT_SCRIPT;
 use crate::utils::get_wayland_socket_info;
+
+
+pub struct SessionState {
+    pub current_user: Mutex<Option<String>>,
+}
+
+impl SessionState {
+    pub fn new() -> Self {
+        Self {
+            current_user: Mutex::new(None),
+        }
+    }
+}
 
 
 #[tauri::command]
@@ -107,7 +121,7 @@ pub fn unmount_drive(app: tauri::AppHandle) -> (bool, Option<String>) {
     }
 
     if let Ok(mut perms) = fs::metadata(script_path).map(|m| m.permissions()) {
-        perms.set_mode(0o755);  // TODO change from octal to binary
+        perms.set_mode(0b111_101_101);
         if let Err(e) = fs::set_permissions(script_path, perms) {
             return (false, Some(format!("Failed to set permissions on unmount script: {}", e)));
         }

@@ -1,4 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { 
+  getBlacklistedUsers,
+} from '../api';
 
 export const LoadingView = () => (
   <div className="view-container">
@@ -44,12 +47,37 @@ export const SetupUserView = ({ onSubmit }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [blacklist, setBlacklist] = useState([]);
+
+  useEffect(() => {
+    const fetchBlacklist = async () => {
+      const users = await getBlacklistedUsers();
+      setBlacklist(users.map(u => u.toLowerCase())); 
+    };
+    fetchBlacklist();
+  }, []);
 
   const handleSubmit = () => {
     if (!username || !password || !confirmPassword) {
       alert("Error: All fields must be filled out.");
       return;
     }
+
+    if (blacklist.includes(username.toLowerCase())) {
+      alert(`Error: The username "${username}" is reserved by the system. Please choose another.`);
+      return;
+    }
+
+    if (username.includes("'")) {
+      alert("Error: Username cannot contain single quotes.");
+      return;
+    }
+
+    if (password.includes("'")) {
+      alert("Error: Password cannot contain single quotes (').");
+      return;
+    }
+
     if (password !== confirmPassword) {
       alert("Error: Passwords do not match.");
       return;

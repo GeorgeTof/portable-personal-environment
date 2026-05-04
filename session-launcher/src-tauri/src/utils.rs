@@ -1,6 +1,18 @@
-use std::process::Command;
 use std::sync::Mutex;
 use std::env;
+use std::process::{Command};
+
+fn get_blacklisted_users_internal() -> Vec<&'static str> {
+    vec![
+        "ubuntu", "debian", "fedora", "alpine", "arch", 
+        "mint", "kali", "root", "admin", "guest"
+    ]
+}
+
+#[tauri::command]
+pub fn get_blacklisted_users() -> Vec<String> {
+    get_blacklisted_users_internal().into_iter().map(String::from).collect()
+}
 
 pub fn get_wayland_socket_info() -> Result<(String, String), String> {
     let runtime_dir = match env::var("XDG_RUNTIME_DIR") {
@@ -140,4 +152,20 @@ impl TerminalManager {
             .unwrap_or(false)
     }
 
+}
+
+pub fn run_lxc_shell_cmd(cmd_str: &str) -> Result<String, String> {
+    let output = Command::new("lxc-attach")
+        .arg("-n").arg("personal-container")
+        .arg("-P").arg("/mnt/ppe/lxc-data")
+        .arg("--")
+        .arg("sh").arg("-c").arg(cmd_str)
+        .output()
+        .map_err(|e| format!("Failed to execute lxc-attach: {}", e))?;
+
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).trim().to_string())
+    }
 }

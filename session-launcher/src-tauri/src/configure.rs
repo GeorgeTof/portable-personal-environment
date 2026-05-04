@@ -4,7 +4,8 @@ use std::process::Command;
 
 use crate::templates::PPE_DEFAULT_CONF;
 use crate::checks::has_acl;
-use crate::utils::{get_wayland_socket_info, TerminalManager};
+use crate::utils::{get_wayland_socket_info, TerminalManager, run_lxc_shell_cmd, get_blacklisted_users};
+use crate::session::SessionState;
 
 #[tauri::command]
 // return must be wrapped in result for async command with borrowed parameter, but is deserialized the same in frontend
@@ -46,7 +47,54 @@ pub async fn create_environment(terminal_manager: tauri::State<'_, TerminalManag
 }
 
 #[tauri::command]
-pub fn configure_user(_username: String, _password: String) -> (bool, Option<String>) {
+pub fn configure_user(
+    username: String, 
+    password: String, 
+    state: tauri::State<'_, SessionState>
+) -> (bool, Option<String>) {
+    let check_cmd = "getent passwd | awk -F: '$3 >= 1000 && $3 < 65534 {print $1}'";
+    let blacklist = get_blacklisted_users();
+
+    if let Ok(existing_users) = run_lxc_shell_cmd(check_cmd) {
+        for user in existing_users.lines() {
+            let u = user.trim();
+            if u.is_empty() { continue; }
+
+            if blacklist.contains(&u.to_string()) {
+                // Terminate processes and delete the default user
+                let _ = run_lxc_shell_cmd(&format!("pkill -9 -u {}", u));
+                let _ = run_lxc_shell_cmd(&format!("userdel -f -r {}", u));
+            } else {
+                // if somehow the custom user was not yet detected, cache it now
+                let mut lock = state.current_user.lock().unwrap();
+                *lock = Some(u.to_string());
+                return (true, None);
+            }
+        }
+    }
+
+    // create the custom user
+    let create_cmd = format!("useradd -m -s /bin/bash {}", username);
+    if let Err(e) = run_lxc_shell_cmd(&create_cmd) {
+        return (false, Some(format!("Failed to create user: {}", e)));
+    }
+
+    // add to the admin group
+    let group_cmd = format!("usermod -aG sudo {0} 2>/dev/null || usermod -aG wheel {0} 2>/dev/null", username);
+    if let Err(e) = run_lxc_shell_cmd(&group_cmd) {
+        return (false, Some(format!("Failed to assign admin permissions: {}", e)));
+    }
+
+    // changing the password
+    // !! obs !! the password doesn't allow single quotes as it brakes the command
+    let pass_cmd = format!("echo '{}:{}' | chpasswd", username, password);
+    if let Err(e) = run_lxc_shell_cmd(&pass_cmd) {
+        return (false, Some(format!("Failed to set password: {}", e)));
+    }
+
+    let mut lock = state.current_user.lock().unwrap();
+    *lock = Some(username);
+
     (true, None)
 }
 

@@ -5,12 +5,14 @@ mod templates;
 mod utils;
 
 use utils::TerminalManager;
+use session::SessionState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(TerminalManager::new())
+        .manage(SessionState::new())
         .invoke_handler(tauri::generate_handler![
             checks::check_host_config,
             checks::check_drive_configuration,
@@ -22,7 +24,8 @@ pub fn run() {
             session::start_container,
             session::check_container_started,
             session::stop_container,
-            session::unmount_drive
+            session::unmount_drive,
+            utils::get_blacklisted_users,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

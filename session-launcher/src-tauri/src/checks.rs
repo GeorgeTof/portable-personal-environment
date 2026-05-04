@@ -4,6 +4,8 @@ use std::path::Path;
 use std::process::Command;
 
 use crate::configure::{configure_acls, configure_wayland_access};
+use crate::utils::{run_lxc_shell_cmd, get_blacklisted_users};
+use crate::session::SessionState;
 
 #[tauri::command]
 pub fn check_host_config() -> (bool, Option<String>) {
@@ -128,8 +130,25 @@ pub fn check_container_runtime_integrity() -> (bool, Option<String>) {
 }
 
 #[tauri::command]
-pub fn check_configured_for_personal_use() -> (bool, Option<String>) {
-    (true, None)
+pub fn check_configured_for_personal_use(state: tauri::State<'_, SessionState>) -> (bool, Option<String>) {
+let check_cmd = "getent passwd | awk -F: '$3 >= 1000 && $3 < 65534 {print $1}'";
+    let blacklist = get_blacklisted_users();
+
+    if let Ok(existing_users) = run_lxc_shell_cmd(check_cmd) {
+        for user in existing_users.lines() {
+            let u = user.trim();
+            if u.is_empty() { continue; }
+
+            if !blacklist.contains(&u.to_string()) {
+                // cache the found valid user
+                let mut lock = state.current_user.lock().unwrap();
+                *lock = Some(u.to_string());
+                return (true, None);
+            }
+        }
+    }
+
+    (false, None)
 }
 
 

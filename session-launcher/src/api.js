@@ -53,8 +53,7 @@ export const checkConfiguredForPersonalUse = () => runTauriCommand('check_config
 
 
 export const createEnvironment = () => runTauriCommand('create_environment');
-export const configureUser = (username, password) => 
-  runTauriCommand('configure_user', { username, password });
+export const configureUser = (username, password) => runTauriCommand('configure_user', { username, password });
 
 
 export const startContainer = () => runTauriCommand('start_container');
@@ -77,5 +76,14 @@ export const forceStopForUnmount = async () => {
     return window.confirm(
       `Fatal error stopping container:\n"${error}"\n\nProceed with unsafe unmount?`
     );
+  }
+};
+
+export const getBlacklistedUsers = async () => {
+  try {
+    return await invoke('get_blacklisted_users');
+  } catch (error) {
+    console.error("Failed to fetch blacklist", error);
+    return [];
   }
 };
