@@ -56,8 +56,31 @@ pub fn check_container_started() -> (bool, Option<String>) {
 }
 
 #[tauri::command]
-pub fn stop_container() -> (bool, Option<String>) {
-    (true, None)
+pub fn stop_container(force: bool) -> (bool, Option<String>) {
+    let mut cmd = Command::new("lxc-stop");
+    cmd.arg("-n").arg("personal-container")
+       .arg("-P").arg("/mnt/ppe/lxc-data");
+
+    if force {
+        // flag bypasses the container's init system and kills all processes instantly
+        cmd.arg("-k"); 
+    } else {
+        // flag requests a graceful shutdown and waits up to 10 seconds
+        cmd.arg("-t").arg("10"); 
+    }
+
+    match cmd.status() {
+        Ok(status) if status.success() => (true, None),
+        Ok(_) => {
+            if !force {
+                // specific keyword to catch in api.js
+                (false, Some("STOP-TIMEOUT".to_string()))
+            } else {
+                (false, Some("Failed to force stop the container.".to_string()))
+            }
+        },
+        Err(e) => (false, Some(format!("Failed to execute lxc-stop: {}", e))),
+    }
 }
 
 #[tauri::command]

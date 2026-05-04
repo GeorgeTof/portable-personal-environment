@@ -15,6 +15,34 @@ const runTauriCommand = async (commandName, args = {}) => {
   }
 };
 
+const runTauriCommandWithAlternative = async (commandName, args = {}) => {
+  try {
+    const [success, errorMessage] = await invoke(commandName, args);
+    
+    if (!success && errorMessage) {
+      // catch expected error for stopping the container
+      if (errorMessage === "STOP-TIMEOUT") {
+        const force = window.confirm("The container is taking too long to shut down (an app might be hanging). Would you like to force stop it?");
+        
+        if (force) {
+          const [forceSuccess, forceError] = await invoke(commandName, { ...args, force: true });
+          if (!forceSuccess && forceError) alert(`Force stop failed: ${forceError}`);
+          return forceSuccess;
+        }
+        
+        return false; 
+      } else {
+        alert(`Error: ${errorMessage}`);
+      }
+    }
+    
+    return success;
+  } catch (error) {
+    alert(`Fatal Application Error: ${error}`);
+    return false; 
+  }
+};
+
 
 export const checkHostConfig = () => runTauriCommand('check_host_config');
 export const checkDriveConfiguration = () => runTauriCommand('check_drive_configuration');
@@ -30,5 +58,6 @@ export const configureUser = (username, password) =>
 
 
 export const startContainer = () => runTauriCommand('start_container');
-export const stopContainer = () => runTauriCommand('stop_container');
 export const unmountDrive = () => runTauriCommand('unmount_drive');
+
+export const stopContainer = (force = false) => runTauriCommandWithAlternative('stop_container', { force });

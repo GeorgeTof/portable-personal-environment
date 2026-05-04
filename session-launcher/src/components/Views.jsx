@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 
 export const LoadingView = () => (
   <div className="view-container">
-    <h2>Initializing...</h2>
+    <h2>Loading...</h2>
     <div className="spinner"></div>
   </div>
 );

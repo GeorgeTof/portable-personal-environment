@@ -8,7 +8,8 @@ import {
   checkContainerStarted,
   checkContainerRuntimeIntegrity,
   checkConfiguredForPersonalUse,
-  configureUser
+  configureUser,
+  stopContainer,
 } from './api';
 import { 
   LoadingView,
@@ -111,13 +112,20 @@ function App() {
     console.log("Unmounting drive... (TODO workaround script and close app)");
   };
 
-  const handleStop = () => {
-    console.log("Stopping container... (API call to be implemented)");
-    // TODO: rust command that tries a clean approach with -t <seconds> timeout first, then force it with -K
-    // maybe if error, have a popup with the error message and return OR give the user there the option ot force kill the container
+  const handleStop = async () => {
+    console.log("Stopping container...");
     setStartError(null);
-    setViewState('ready');
-    setFooterState('unmount');
+    setViewState('loading');
+    
+    const success = await stopContainer(false);
+
+    if (success) {
+      setViewState('ready');
+      setFooterState('unmount');
+    } else {
+      setViewState('launcher');
+      setFooterState('stop');
+    }
   };
 
   const handleConfigureUser = async (username, password) => {
