@@ -1,7 +1,10 @@
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 use std::thread;
+use std::fs;
+use std::os::unix::fs::PermissionsExt;
 
+use crate::templates::UNMOUNT_SCRIPT;
 use crate::utils::get_wayland_socket_info;
 
 
@@ -84,6 +87,32 @@ pub fn stop_container(force: bool) -> (bool, Option<String>) {
 }
 
 #[tauri::command]
-pub fn unmount_drive() -> (bool, Option<String>) {
-    (true, None)
+pub fn unmount_drive(app: tauri::AppHandle) -> (bool, Option<String>) {
+    let script_path = "/tmp/ppe-unmount-workaround.sh";
+
+    if let Err(e) = fs::write(script_path, UNMOUNT_SCRIPT) {
+        return (false, Some(format!("Failed to write unmount script: {}", e)));
+    }
+
+    if let Ok(mut perms) = fs::metadata(script_path).map(|m| m.permissions()) {
+        perms.set_mode(0o755);  // TODO change from octal to binary
+        if let Err(e) = fs::set_permissions(script_path, perms) {
+            return (false, Some(format!("Failed to set permissions on unmount script: {}", e)));
+        }
+    } else {
+        return (false, Some("Failed to read metadata for unmount script.".to_string()));
+    }
+
+    match Command::new(script_path) 
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn() 
+    {
+        Ok(_) => {
+            app.exit(0); 
+            (true, None)
+        },
+        Err(e) => (false, Some(format!("Failed to execute unmount script: {}", e))),
+    }
 }

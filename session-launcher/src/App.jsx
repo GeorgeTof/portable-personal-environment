@@ -1,3 +1,4 @@
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import React, { useState, useEffect } from 'react';
 import { 
   checkHostConfig, 
@@ -10,6 +11,7 @@ import {
   checkConfiguredForPersonalUse,
   configureUser,
   stopContainer,
+  unmountDrive,
 } from './api';
 import { 
   LoadingView,
@@ -108,8 +110,15 @@ function App() {
     setViewState('launcher');
   };
 
-  const handleUnmount = () => {
+  const handleUnmount = async () => {
     console.log("Unmounting drive... (TODO workaround script and close app)");
+    setViewState('loading'); 
+
+    const success = await unmountDrive();
+    
+    if (!success) {
+      setViewState('ready');
+    }
   };
 
   const handleStop = async () => {
