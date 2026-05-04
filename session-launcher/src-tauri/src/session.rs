@@ -62,7 +62,7 @@ pub fn check_container_started() -> (bool, Option<String>) {
 pub fn stop_container(force: bool) -> (bool, Option<String>) {
     let mut cmd = Command::new("lxc-stop");
     cmd.arg("-n").arg("personal-container")
-       .arg("-P").arg("/mnt/ppe/lxc-data");
+    .arg("-P").arg("/mnt/ppe/lxc-data");
 
     if force {
         // flag bypasses the container's init system and kills all processes instantly
@@ -72,14 +72,26 @@ pub fn stop_container(force: bool) -> (bool, Option<String>) {
         cmd.arg("-t").arg("10"); 
     }
 
-    match cmd.status() {
-        Ok(status) if status.success() => (true, None),
-        Ok(_) => {
+    match cmd.output() {
+        Ok(output) => {
+            if output.status.success() {
+                return (true, None);
+            }
+
+            let combined_output = format!(
+                "{} {}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            ).to_lowercase();
+
+            if force && combined_output.contains("is not running") {
+                return (false, Some("NOT_RUNNING".to_string()));
+            }
+
             if !force {
-                // specific keyword to catch in api.js
-                (false, Some("STOP-TIMEOUT".to_string()))
+                (false, Some("TIMEOUT".to_string()))
             } else {
-                (false, Some("Failed to force stop the container.".to_string()))
+                (false, Some(combined_output.trim().to_string()))
             }
         },
         Err(e) => (false, Some(format!("Failed to execute lxc-stop: {}", e))),

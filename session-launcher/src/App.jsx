@@ -12,6 +12,7 @@ import {
   configureUser,
   stopContainer,
   unmountDrive,
+  forceStopForUnmount,
 } from './api';
 import { 
   LoadingView,
@@ -197,6 +198,35 @@ function App() {
         return null;
     }
   };
+  
+  useEffect(() => {
+    let unlistenFn;
+
+    const setupCloseInterceptor = async () => {
+      const appWindow = getCurrentWindow();
+      
+      unlistenFn = await appWindow.onCloseRequested(async (event) => {
+        // stop the window from closing immediately
+        event.preventDefault();
+        
+        setViewState('loading'); 
+
+        const proceedToUnmount = await forceStopForUnmount();
+        
+        if (proceedToUnmount) {
+          await unmountDrive(); 
+        } else {
+          setViewState('ready'); 
+        }
+      });
+    };
+
+    setupCloseInterceptor();
+
+    return () => {
+      if (unlistenFn) unlistenFn();
+    };
+  }, []);
 
   return (
     <div className="app-layout">

@@ -61,3 +61,21 @@ export const startContainer = () => runTauriCommand('start_container');
 export const unmountDrive = () => runTauriCommand('unmount_drive');
 
 export const stopContainer = (force = false) => runTauriCommandWithAlternative('stop_container', { force });
+
+export const forceStopForUnmount = async () => {
+  try {
+    const [success, errorMessage] = await invoke('stop_container', { force: true });
+    
+    if (success || errorMessage === "NOT_RUNNING") {
+      return true;
+    }
+    
+    return window.confirm(
+      `Failed to safely stop the container:\n"${errorMessage}"\n\nDo you want to proceed with an unsafe unmount of the drive at your own risk?`
+    );
+  } catch (error) {
+    return window.confirm(
+      `Fatal error stopping container:\n"${error}"\n\nProceed with unsafe unmount?`
+    );
+  }
+};
