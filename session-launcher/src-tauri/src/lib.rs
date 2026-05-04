@@ -3,6 +3,7 @@ mod configure;
 mod session;
 mod templates;
 mod terminal;
+mod utils;
 
 use terminal::TerminalManager;
 
@@ -15,12 +16,12 @@ pub fn run() {
             checks::check_host_config,
             checks::check_drive_configuration,
             checks::check_container_integrity,
-            checks::check_container_started,
             checks::check_container_runtime_integrity,
             checks::check_configured_for_personal_use,
             configure::create_environment,
             configure::configure_user,
             session::start_container,
+            session::check_container_started,
             session::stop_container,
             session::unmount_drive
         ])

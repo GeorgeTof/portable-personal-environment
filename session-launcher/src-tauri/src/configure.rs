@@ -1,11 +1,11 @@
 use std::fs;
 use std::path::Path;
 use std::process::Command;
-use std::env;
 
 use crate::templates::PPE_DEFAULT_CONF;
 use crate::terminal::TerminalManager;
 use crate::checks::has_acl;
+use crate::utils::get_wayland_socket_info;
 
 #[tauri::command]
 // return must be wrapped in result for async command with borrowed parameter, but is deserialized the same in frontend
@@ -54,20 +54,11 @@ pub fn configure_user(_username: String, _password: String) -> (bool, Option<Str
 
 
 pub fn configure_wayland_access() -> (bool, Option<String>) {
-    let runtime_dir = match env::var("XDG_RUNTIME_DIR") {
-        Ok(dir) => dir,
-        Err(_) => {
-            // fallback to find the runtime directory
-            match Command::new("id").arg("-u").output() {
-                Ok(out) if out.status.success() => {
-                    let uid = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                    format!("/run/user/{}", uid)
-                }
-                _ => return (false, Some("Failed to determine current user ID (id -u failed).".to_string())),
-            }
-        }
+    let (runtime_dir, wayland_display) = match get_wayland_socket_info() {
+        Ok(info) => info,
+        Err(err_msg) => return (false, Some(err_msg)),
     };
-    let wayland_display = std::env::var("WAYLAND_DISPLAY").unwrap_or_else(|_| "wayland-0".to_string());
+
     let wayland_socket = format!("{}/{}", runtime_dir, wayland_display);
 
     if !Path::new(&wayland_socket).exists() {
