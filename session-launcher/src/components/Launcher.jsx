@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { attachTerminal } from '../api';
 import terminalIcon from '../assets/terminal-1.svg';
 
 // Individual Icon Component
@@ -49,10 +50,13 @@ export const LauncherView = () => {
   }, []);
 
   // Handle standard left click
-  const handleAppClick = (app) => {
+  const handleAppClick = async (app) => {
     if (app.isCustom) {
       if (app.exec === '__builtin_terminal__') {
-        console.log("TODO: Call Rust to launch host terminal attached to container");
+        const success = await attachTerminal();
+        if (!success) {
+            console.error("Failed to attach terminal.");
+        }
       }
     } else {
       console.log(`TODO: Call Rust to launch ${app.name} normally`);

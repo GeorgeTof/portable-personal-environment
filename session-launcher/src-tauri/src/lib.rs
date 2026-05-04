@@ -25,6 +25,7 @@ pub fn run() {
             session::check_container_started,
             session::stop_container,
             session::unmount_drive,
+            session::attach_terminal,
             utils::get_blacklisted_users,
         ])
         .run(tauri::generate_context!())

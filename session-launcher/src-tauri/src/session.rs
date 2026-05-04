@@ -6,7 +6,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::sync::Mutex;
 
 use crate::templates::UNMOUNT_SCRIPT;
-use crate::utils::get_wayland_socket_info;
+use crate::utils::{get_wayland_socket_info, TerminalManager};
 
 
 pub struct SessionState {
@@ -140,5 +140,29 @@ pub fn unmount_drive(app: tauri::AppHandle) -> (bool, Option<String>) {
             (true, None)
         },
         Err(e) => (false, Some(format!("Failed to execute unmount script: {}", e))),
+    }
+}
+
+#[tauri::command]
+pub fn attach_terminal(
+    state: tauri::State<'_, SessionState>,
+    terminal_manager: tauri::State<'_, TerminalManager>,
+) -> (bool, Option<String>) {
+    
+    let user_lock = state.current_user.lock().unwrap();
+    let username = match &*user_lock {
+        Some(u) => u.clone(),
+        None => return (false, Some("No user is currently logged in or configured.".to_string())),
+    };
+
+    let lxc_cmd = format!(
+        "exec lxc-attach -n personal-container -P /mnt/ppe/lxc-data --clear-env -- sudo -u {} WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/tmp -i",
+        username
+    );
+
+    match terminal_manager.launch_detached(&lxc_cmd) {
+        Ok(true) => (true, None),
+        Ok(false) => (false, Some("Failed to launch detached terminal.".to_string())),
+        Err(e) => (false, Some(e)),
     }
 }
