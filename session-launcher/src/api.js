@@ -88,3 +88,12 @@ export const getBlacklistedUsers = async () => {
     return [];
   }
 };
+
+export const getInstalledApps = async () => {
+  try {
+    return await invoke('get_installed_apps');
+  } catch (error) {
+    console.error("Failed to fetch installed apps", error);
+    return [];
+  }
+};

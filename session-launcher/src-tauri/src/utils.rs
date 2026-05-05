@@ -1,6 +1,7 @@
 use std::sync::Mutex;
 use std::env;
 use std::process::{Command};
+use std::path::Path;
 
 fn get_blacklisted_users_internal() -> Vec<&'static str> {
     vec![
@@ -168,4 +169,49 @@ pub fn run_lxc_shell_cmd(cmd_str: &str) -> Result<String, String> {
     } else {
         Err(String::from_utf8_lossy(&output.stderr).trim().to_string())
     }
+}
+
+pub fn resolve_icon_path(icon_name: &str) -> String {
+    let icon_name = icon_name.trim();
+    if icon_name.is_empty() {
+        return "".to_string();
+    }
+
+    // absolute paths from inside the container
+    if icon_name.starts_with('/') {
+        let host_path = format!("/mnt/ppe/lxc-data/personal-container/rootfs{}", icon_name);
+        if Path::new(&host_path).exists() {
+            return host_path;
+        }
+        // If it starts with / but wasn't found, strip extension and try the fallback logic ???
+        // (Sometimes absolute paths omit the extension)
+    }
+
+    // standard directories & pixmaps
+    let base_icon_dir = "/mnt/ppe/lxc-data/personal-container/rootfs/usr/share/icons/hicolor";
+    let pixmaps_dir = "/mnt/ppe/lxc-data/personal-container/rootfs/usr/share/pixmaps";
+
+    // prioritize SVG, then high-res PNGs, down to low-res
+    let sizes = ["scalable", "256x256", "128x128", "64x64", "48x48", "32x32"];
+    let extensions = [".svg", ".png", ".xpm"];
+
+    // hicolor theme
+    for size in sizes {
+        for ext in extensions {
+            let path = format!("{}/{}/apps/{}{}", base_icon_dir, size, icon_name, ext);
+            if Path::new(&path).exists() {
+                return path;
+            }
+        }
+    }
+
+    // fallback pixmaps directory
+    for ext in extensions {
+        let path = format!("{}/{}{}", pixmaps_dir, icon_name, ext);
+        if Path::new(&path).exists() {
+            return path;
+        }
+    }
+
+    "".to_string()
 }

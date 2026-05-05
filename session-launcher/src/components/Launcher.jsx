@@ -1,5 +1,9 @@
+import { convertFileSrc } from '@tauri-apps/api/core';
 import React, { useState, useEffect } from 'react';
-import { attachTerminal } from '../api';
+import { 
+    attachTerminal,
+    getInstalledApps,
+ } from '../api';
 import terminalIcon from '../assets/terminal-1.svg';
 
 // Individual Icon Component
@@ -32,14 +36,25 @@ export const LauncherView = () => {
         icon: terminalIcon, 
         isCustom: true
       }
-      // TODO add File Explorer entry here
+      // TODO add File Explorer entry
     ];
 
-    // TODO: Await Rust backend call to fetch parsed .desktop entries
-    // const desktopApps = await getInstalledApps();
-    // setApps([...builtinApps, ...desktopApps]);
-    
-    setApps(builtinApps);
+    const loadApps = async () => {
+      const desktopApps = await getInstalledApps();
+      
+      // convert absolute file paths to Tauri-safe URLs
+      const safeApps = desktopApps.map(app => {
+        if (!app.isCustom && app.icon) {
+          app.icon = convertFileSrc(app.icon);
+        }
+        return app;
+      });
+
+      setApps([...builtinApps, ...safeApps]);
+      // TODO: sort alphabetically again here
+    };
+
+    loadApps();
   }, []);
 
   // Close context menu on any global click

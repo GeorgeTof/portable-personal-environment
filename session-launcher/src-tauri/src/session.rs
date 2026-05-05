@@ -4,9 +4,11 @@ use std::thread;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::sync::Mutex;
+use std::path::Path;
+use serde::Serialize;
 
 use crate::templates::UNMOUNT_SCRIPT;
-use crate::utils::{get_wayland_socket_info, TerminalManager};
+use crate::utils::{get_wayland_socket_info, TerminalManager, resolve_icon_path};
 
 
 pub struct SessionState {
@@ -165,4 +167,96 @@ pub fn attach_terminal(
         Ok(false) => (false, Some("Failed to launch detached terminal.".to_string())),
         Err(e) => (false, Some(e)),
     }
+}
+
+#[derive(Serialize, Clone)]
+pub struct DesktopApp {
+    pub name: String,
+    pub exec: String,
+    pub icon: String,
+    #[serde(rename = "isCustom")]
+    pub is_custom: bool,
+}
+
+#[tauri::command]
+pub fn get_installed_apps(state: tauri::State<'_, SessionState>) -> Result<Vec<DesktopApp>, String> {
+    let mut apps = Vec::new();
+    
+    // also check user local applications
+    let user_lock = state.current_user.lock().unwrap();
+    let username = user_lock.clone().unwrap_or_else(|| "root".to_string());
+
+    let search_dirs = vec![
+        "/mnt/ppe/lxc-data/personal-container/rootfs/usr/share/applications".to_string(),
+        format!("/mnt/ppe/lxc-data/personal-container/rootfs/home/{}/.local/share/applications", username),
+    ];
+
+    for dir in search_dirs {
+        if let Ok(entries) = fs::read_dir(&dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().and_then(|e| e.to_str()) == Some("desktop") {
+                    if let Some(app) = parse_desktop_file(&path) {
+                        apps.push(app);
+                    }
+                }
+            }
+        }
+    }
+
+    apps.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    
+    Ok(apps)
+}
+
+fn parse_desktop_file(path: &Path) -> Option<DesktopApp> {
+    let content = fs::read_to_string(path).ok()?;
+    
+    let mut name = String::new();
+    let mut exec = String::new();
+    let mut icon = String::new();
+    let mut no_display = false;
+    let mut in_desktop_entry = false;
+
+    for line in content.lines() {
+        let line = line.trim();
+        if line == "[Desktop Entry]" {
+            in_desktop_entry = true;
+            continue;
+        } else if line.starts_with('[') {
+            in_desktop_entry = false;
+            continue;
+        }
+
+        if !in_desktop_entry { continue; }
+
+        if line.starts_with("Name=") && name.is_empty() {
+            name = line["Name=".len()..].to_string();
+        } else if line.starts_with("Exec=") && exec.is_empty() {
+            let raw_exec = line["Exec=".len()..].to_string();
+            // strip out file/url arguments that break the command -> TODO - check if this brakes apps
+            exec = raw_exec
+                .replace("%u", "").replace("%U", "")
+                .replace("%f", "").replace("%F", "")
+                .replace("%c", "").replace("%k", "")
+                .trim()
+                .to_string();
+        } else if line.starts_with("Icon=") && icon.is_empty() {
+            icon = line["Icon=".len()..].to_string();
+        } else if line.starts_with("NoDisplay=true") {
+            no_display = true;
+        }
+    }
+
+    // ignore if it's meant to be hidden, or if it lacks a name or exec command
+    if no_display || name.is_empty() || exec.is_empty() {
+        return None;
+    }
+
+    Some(DesktopApp {
+        name,
+        exec,
+        icon: resolve_icon_path(&icon),
+        is_custom: false,
+    })
 }
