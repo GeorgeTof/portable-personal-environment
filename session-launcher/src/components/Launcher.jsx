@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { 
     attachTerminal,
     getInstalledApps,
+    launchApp,
  } from '../api';
 import terminalIcon from '../assets/terminal-1.svg';
 
@@ -51,7 +52,7 @@ export const LauncherView = () => {
       });
 
       setApps([...builtinApps, ...safeApps]);
-      // TODO: sort alphabetically again here
+      // TODO: sort alphabetically again (or only) here
     };
 
     loadApps();
@@ -74,7 +75,8 @@ export const LauncherView = () => {
         }
       }
     } else {
-      console.log(`TODO: Call Rust to launch ${app.name} normally`);
+      const success = await launchApp(app.exec, false);
+      if (!success) console.error(`Failed to launch ${app.name}`);
     }
   };
 
@@ -90,9 +92,10 @@ export const LauncherView = () => {
     });
   };
 
-  const handleLaunchWithTerminal = () => {
+  const handleLaunchWithTerminal = async () => {
     if (!contextMenu?.app) return;
-    console.log(`TODO: Call Rust to launch ${contextMenu.app.name} with terminal attached`);
+    const success = await launchApp(contextMenu.app.exec, true);
+    if (!success) console.error(`Failed to launch ${contextMenu.app.name} with terminal`);
     setContextMenu(null);
   };
 

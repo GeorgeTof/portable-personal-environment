@@ -27,6 +27,7 @@ pub fn run() {
             session::unmount_drive,
             session::attach_terminal,
             session::get_installed_apps,
+            session::launch_app,
             utils::get_blacklisted_users,
         ])
         .run(tauri::generate_context!())

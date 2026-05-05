@@ -260,3 +260,56 @@ fn parse_desktop_file(path: &Path) -> Option<DesktopApp> {
         is_custom: false,
     })
 }
+
+#[tauri::command]
+pub fn launch_app(
+    exec: String,
+    with_terminal: bool,
+    state: tauri::State<'_, SessionState>,
+    terminal_manager: tauri::State<'_, TerminalManager>,
+) -> (bool, Option<String>) {
+    
+    let user_lock = state.current_user.lock().unwrap();
+    let username = match &*user_lock {
+        Some(u) => u.clone(),
+        None => return (false, Some("No user is currently logged in.".to_string())),
+    };
+
+    if with_terminal {
+        // escape single quotes for safe injection into bash -c '...'
+        let escaped_exec = exec.replace('\'', "'\\''");
+        
+        // so the terminal doesn't close instantly if the app crashes
+        let container_cmd = format!(
+            "{} ; echo ''; read -p 'Process exited. Press Enter to close...' -r", 
+            escaped_exec
+        );
+
+        let lxc_cmd = format!(
+            "exec lxc-attach -n personal-container -P /mnt/ppe/lxc-data --clear-env -- sudo -u {} WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/tmp bash -c '{}'",
+            username, container_cmd
+        );
+
+        match terminal_manager.launch_detached(&lxc_cmd) {
+            Ok(true) => (true, None),
+            Ok(false) => (false, Some("Failed to launch detached terminal.".to_string())),
+            Err(e) => (false, Some(e)),
+        }
+    } else {
+        let status = Command::new("lxc-attach")
+            .arg("-n").arg("personal-container")
+            .arg("-P").arg("/mnt/ppe/lxc-data")
+            .arg("--clear-env")
+            .arg("--")
+            .arg("sudo").arg("-u").arg(&username)
+            .arg("WAYLAND_DISPLAY=wayland-0")
+            .arg("XDG_RUNTIME_DIR=/tmp")
+            .arg("bash").arg("-c").arg(&exec)
+            .spawn(); 
+
+        match status {
+            Ok(_) => (true, None),
+            Err(e) => (false, Some(format!("Failed to spawn background app: {}", e))),
+        }
+    }
+}
