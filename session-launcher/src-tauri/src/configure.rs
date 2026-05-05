@@ -114,28 +114,30 @@ pub fn configure_wayland_access() -> (bool, Option<String>) {
     }
 
     // grant container root traversal access to the runtime directory (if not already set)
-    if !has_acl(&runtime_dir, "100000", "--x") {
-        let status_dir = Command::new("setfacl")
-            .arg("-m")
-            .arg("u:100000:x")
-            .arg(&runtime_dir)
-            .status();
-
-        if !status_dir.map(|s| s.success()).unwrap_or(false) {
-            return (false, Some(format!("Failed to set traversal ACLs on {}", runtime_dir)));
+    for uid in ["100000", "101000"] {
+        if !has_acl(&runtime_dir, uid, "--x") {
+            let status = Command::new("setfacl")
+                .arg("-m").arg(format!("u:{}:x", uid))
+                .arg(&runtime_dir)
+                .status();
+            
+            if !status.map(|s| s.success()).unwrap_or(false) {
+                return (false, Some(format!("Failed to set traversal ACLs for {} on {}", uid, runtime_dir)));
+            }
         }
     }
 
     // grant container root read/write access to the Wayland socket itself (if not already set)
-    if !has_acl(&wayland_socket, "100000", "rw-") {
-        let status_sock = Command::new("setfacl")
-            .arg("-m")
-            .arg("u:100000:rw")
-            .arg(&wayland_socket)
-            .status();
+    for uid in ["100000", "101000"] {
+        if !has_acl(&wayland_socket, uid, "rw-") {
+            let status = Command::new("setfacl")
+                .arg("-m").arg(format!("u:{}:rw", uid))
+                .arg(&wayland_socket)
+                .status();
 
-        if !status_sock.map(|s| s.success()).unwrap_or(false) {
-            return (false, Some(format!("Failed to set read/write ACLs on {}", wayland_socket)));
+            if !status.map(|s| s.success()).unwrap_or(false) {
+                return (false, Some(format!("Failed to set R/W ACLs for {} on {}", uid, wayland_socket)));
+            }
         }
     }
 

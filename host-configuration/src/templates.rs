@@ -1,5 +1,5 @@
 pub const GPU_UDEV_RULE: &str = 
-    "ACTION==\"add|change\", SUBSYSTEM==\"drm\", RUN+=\"/usr/bin/setfacl -m u:100000:rw $env{DEVNAME}\"\n";
+    "ACTION==\"add|change\", SUBSYSTEM==\"drm\", RUN+=\"/usr/bin/setfacl -m u:100000:rw,u:101000:rw $env{DEVNAME}\"\n";
 
 pub const IGNORE_PPE_UDEV_RULE: &str = 
     "SUBSYSTEM==\"block\", ENV{ID_FS_LABEL}==\"PPE\", ENV{UDISKS_IGNORE}=\"1\"\n";
