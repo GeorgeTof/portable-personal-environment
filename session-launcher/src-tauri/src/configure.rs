@@ -92,6 +92,12 @@ pub fn configure_user(
         return (false, Some(format!("Failed to set password: {}", e)));
     }
 
+    // make the home directory accessible by the host file manager
+    let chmod_cmd = format!("chmod -R o+rwx /home/{}", username);
+    if let Err(e) = run_lxc_shell_cmd(&chmod_cmd) {
+        return (false, Some(format!("Failed to set portable permissions on home directory: {}", e)));
+    }
+
     let mut lock = state.current_user.lock().unwrap();
     *lock = Some(username);
 

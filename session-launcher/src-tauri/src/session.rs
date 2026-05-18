@@ -8,7 +8,7 @@ use std::path::Path;
 use serde::Serialize;
 
 use crate::templates::UNMOUNT_SCRIPT;
-use crate::utils::{get_wayland_socket_info, TerminalManager, resolve_icon_path};
+use crate::utils::{get_wayland_socket_info, TerminalManager, FileManager, resolve_icon_path};
 
 
 pub struct SessionState {
@@ -165,6 +165,27 @@ pub fn attach_terminal(
     match terminal_manager.launch_detached(&lxc_cmd) {
         Ok(true) => (true, None),
         Ok(false) => (false, Some("Failed to launch detached terminal.".to_string())),
+        Err(e) => (false, Some(e)),
+    }
+}
+
+#[tauri::command]
+pub fn open_explorer(
+    state: tauri::State<'_, SessionState>,
+    file_manager: tauri::State<'_, FileManager>,
+) -> (bool, Option<String>) {
+    
+    let user_lock = state.current_user.lock().unwrap();
+    let username = match &*user_lock {
+        Some(u) => u.clone(),
+        None => return (false, Some("No user is currently logged in.".to_string())),
+    };
+
+    let home_path = format!("/mnt/ppe/lxc-data/personal-container/rootfs/home/{}", username);
+
+    match file_manager.open_directory(&home_path) {
+        Ok(true) => (true, None),
+        Ok(false) => (false, Some("Failed to launch detached file manager.".to_string())),
         Err(e) => (false, Some(e)),
     }
 }

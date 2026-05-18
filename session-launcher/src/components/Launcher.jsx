@@ -2,10 +2,12 @@ import { convertFileSrc } from '@tauri-apps/api/core';
 import React, { useState, useEffect } from 'react';
 import { 
     attachTerminal,
+    openExplorer,
     getInstalledApps,
     launchApp,
  } from '../api';
 import terminalIcon from '../assets/terminal-1.svg';
+import filesIcon from '../assets/files-1.png';
 
 // Individual Icon Component
 const AppIcon = ({ app, onClick, onContextMenu }) => {
@@ -36,8 +38,13 @@ export const LauncherView = ({ refreshTrigger }) => {
         exec: '__builtin_terminal__',
         icon: terminalIcon, 
         isCustom: true
+      },
+      {
+        name: 'Files',
+        exec: '__builtin_explorer__',
+        icon: filesIcon,
+        isCustom: true
       }
-      // TODO add File Explorer entry
     ];
 
     const loadApps = async () => {
@@ -77,6 +84,10 @@ export const LauncherView = ({ refreshTrigger }) => {
         if (!success) {
             console.error("Failed to attach terminal.");
         }
+      }
+      else if (app.exec === '__builtin_explorer__') {
+        const success = await openExplorer();
+        if (!success) console.error("Failed to open file explorer.");
       }
     } else {
       const success = await launchApp(app.exec, false);

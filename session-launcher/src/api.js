@@ -59,6 +59,7 @@ export const configureUser = (username, password) => runTauriCommand('configure_
 export const startContainer = () => runTauriCommand('start_container');
 export const unmountDrive = () => runTauriCommand('unmount_drive');
 export const attachTerminal = () => runTauriCommand('attach_terminal');
+export const openExplorer = () => runTauriCommand('open_explorer');
 export const launchApp = (exec, withTerminal = false) => runTauriCommand('launch_app', { exec, withTerminal });
 
 export const stopContainer = (force = false) => runTauriCommandWithAlternative('stop_container', { force });

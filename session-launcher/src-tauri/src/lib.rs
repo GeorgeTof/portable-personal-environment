@@ -12,6 +12,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(TerminalManager::new())
+        .manage(utils::FileManager::new())
         .manage(SessionState::new())
         .invoke_handler(tauri::generate_handler![
             checks::check_host_config,
@@ -26,6 +27,7 @@ pub fn run() {
             session::stop_container,
             session::unmount_drive,
             session::attach_terminal,
+            session::open_explorer,
             session::get_installed_apps,
             session::launch_app,
             utils::get_blacklisted_users,

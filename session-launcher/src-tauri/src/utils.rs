@@ -171,6 +171,64 @@ pub fn run_lxc_shell_cmd(cmd_str: &str) -> Result<String, String> {
     }
 }
 
+pub struct FileManager {
+    cached_manager: Mutex<Option<String>>,
+}
+
+impl FileManager {
+    pub fn new() -> Self {
+        Self {
+            cached_manager: Mutex::new(None),
+        }
+    }
+
+    pub fn open_directory(&self, path: &str) -> Result<bool, String> {
+        let manager = self.get_or_find_manager()?;
+        
+        let status = Command::new(manager)
+            .arg(path)
+            .spawn(); // spawn detached
+
+        Ok(status.is_ok())
+    }
+
+    fn get_or_find_manager(&self) -> Result<String, String> {
+        {
+            let mut lock = self.cached_manager.lock().unwrap();
+            
+            if let Some(mgr) = &*lock {
+                return Ok(mgr.clone());
+            }
+
+            let managers = [
+                "nautilus",  // GNOME
+                "dolphin",   // KDE
+                "thunar",    // XFCE
+                "nemo",      // Cinnamon
+                "pcmanfm",   // LXDE/LXQt
+                "xdg-open"   // Standard Linux catch-all fallback
+            ];
+            
+            for mgr in managers {
+                if Self::command_exists(mgr) {
+                    *lock = Some(mgr.to_string());
+                    return Ok(mgr.to_string());
+                }
+            }
+        }
+
+        Err("Could not find a supported file manager on the host system.".to_string())
+    }
+
+    fn command_exists(command: &str) -> bool {
+        Command::new("which")
+            .arg(command)
+            .output()
+            .map(|out| out.status.success())
+            .unwrap_or(false)
+    }
+}
+
 pub fn resolve_icon_path(icon_name: &str) -> String {
     let icon_name = icon_name.trim();
     if icon_name.is_empty() {
