@@ -31,6 +31,7 @@ function App() {
   const [viewState, setViewState] = useState('loading'); // loading, hostError, missingEnv, corruptEnv, ready, creationFailed
   const [footerState, setFooterState] = useState('none'); // none, unmount, stop
   const [startError, setStartError] = useState(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   useEffect(() => {
     runStartupChecks();
@@ -152,7 +153,8 @@ function App() {
   };
 
   const handleRefresh = () => {
-    console.log("TODO Refresh button pressed!");
+    console.log("Refreshing the GUI applications list");
+    setRefreshTrigger(prev => prev + 1);
   };
 
 
@@ -194,7 +196,7 @@ function App() {
       case 'setupUser':
         return <SetupUserView onSubmit={handleConfigureUser} />;
       case 'launcher':
-        return <LauncherView />;
+        return <LauncherView refreshTrigger={refreshTrigger} />;
       default: 
         return null;
     }

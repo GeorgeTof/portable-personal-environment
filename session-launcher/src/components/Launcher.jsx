@@ -24,7 +24,7 @@ const AppIcon = ({ app, onClick, onContextMenu }) => {
 };
 
 // Main Launcher View
-export const LauncherView = () => {
+export const LauncherView = ({ refreshTrigger }) => {
   const [apps, setApps] = useState([]);
   const [contextMenu, setContextMenu] = useState(null);
 
@@ -51,12 +51,16 @@ export const LauncherView = () => {
         return app;
       });
 
-      setApps([...builtinApps, ...safeApps]);
-      // TODO: sort alphabetically again (or only) here
+      const combinedApps = [...builtinApps, ...safeApps];
+      combinedApps.sort((a, b) => 
+        a.name.toLowerCase().localeCompare(b.name.toLowerCase())
+      );
+
+      setApps(combinedApps);
     };
 
     loadApps();
-  }, []);
+  }, [refreshTrigger]);
 
   // Close context menu on any global click
   useEffect(() => {
