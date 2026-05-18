@@ -5,6 +5,7 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::sync::Mutex;
 use std::path::Path;
+use std::env;
 use serde::Serialize;
 
 use crate::templates::UNMOUNT_SCRIPT;
@@ -157,9 +158,12 @@ pub fn attach_terminal(
         None => return (false, Some("No user is currently logged in or configured.".to_string())),
     };
 
+    // inject the host's terminal type
+    let term_env = env::var("TERM").unwrap_or_else(|_| "xterm-256color".to_string());
+
     let lxc_cmd = format!(
-        "exec lxc-attach -n personal-container -P /mnt/ppe/lxc-data --clear-env -- sudo -u {} WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/tmp -i",
-        username
+        "exec lxc-attach -n personal-container -P /mnt/ppe/lxc-data --clear-env -- sudo -u {} WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/tmp TERM={} -i",
+        username, term_env
     );
 
     match terminal_manager.launch_detached(&lxc_cmd) {
@@ -168,7 +172,6 @@ pub fn attach_terminal(
         Err(e) => (false, Some(e)),
     }
 }
-
 #[tauri::command]
 pub fn open_explorer(
     state: tauri::State<'_, SessionState>,
