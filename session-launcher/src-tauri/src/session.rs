@@ -162,7 +162,7 @@ pub fn attach_terminal(
     let term_env = env::var("TERM").unwrap_or_else(|_| "xterm-256color".to_string());
 
     let lxc_cmd = format!(
-        "exec lxc-attach -n personal-container -P /mnt/ppe/lxc-data --clear-env -- sudo -u {} WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/tmp TERM={} -i",
+        "exec lxc-attach -n personal-container -P /mnt/ppe/lxc-data --clear-env -- sudo -u {0} bash -c 'export WAYLAND_DISPLAY=wayland-0 && export XDG_RUNTIME_DIR=/tmp && export TERM={1} && cd /home/{0} && exec bash -il'",
         username, term_env
     );
 
