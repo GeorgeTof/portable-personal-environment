@@ -5,7 +5,7 @@ use std::process::Command;
 use crate::templates::PPE_DEFAULT_CONF;
 use crate::checks::has_acl;
 use crate::utils::{get_wayland_socket_info, TerminalManager, run_lxc_shell_cmd, get_blacklisted_users};
-use crate::session::{SessionState, initialize_dbus_session};
+use crate::session::{SessionState, initial_session_config};
 
 #[tauri::command]
 // return must be wrapped in result for async command with borrowed parameter, but is deserialized the same in frontend
@@ -104,7 +104,7 @@ pub fn configure_user(
     }
 
     // initialize the D-Bus session
-    let (dbus_ok, dbus_err) = initialize_dbus_session(&username);
+    let (dbus_ok, dbus_err) = initial_session_config(&username);
     if !dbus_ok {
         return (false, dbus_err);
     }

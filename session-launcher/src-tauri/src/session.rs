@@ -158,12 +158,9 @@ pub fn attach_terminal(
         None => return (false, Some("No user is currently logged in or configured.".to_string())),
     };
 
-    // inject the host's terminal type
-    let term_env = env::var("TERM").unwrap_or_else(|_| "xterm-256color".to_string());
-
     let lxc_cmd = format!(
-        "exec lxc-attach -n personal-container -P /mnt/ppe/lxc-data --clear-env -- sudo -u {0} bash -c 'export WAYLAND_DISPLAY=wayland-0 && export XDG_RUNTIME_DIR=/home/{0}/.xdg_run && export TERM={1} && export NO_AT_BRIDGE=1 && export ELECTRON_OZONE_PLATFORM_HINT=wayland; [ -f /home/{0}/.dbus_env ] && source /home/{0}/.dbus_env; cd /home/{0} && exec bash -i'",
-        username, term_env
+        "exec lxc-attach -n personal-container -P /mnt/ppe/lxc-data --clear-env -- sudo -u {0} bash -c '[ -f /home/{0}/.session_env ] && source /home/{0}/.session_env; cd /home/{0} && exec bash -i'",
+        username
     );
 
     match terminal_manager.launch_detached(&lxc_cmd) {
@@ -337,7 +334,7 @@ pub fn launch_app(
         
         // so the variables are exported safely && terminal doesn't close instantly if the app crashes
         let container_cmd = format!(
-            "export WAYLAND_DISPLAY=wayland-0 && export XDG_RUNTIME_DIR=/home/{0}/.xdg_run && export NO_AT_BRIDGE=1 && export ELECTRON_OZONE_PLATFORM_HINT=wayland; [ -f /home/{0}/.dbus_env ] && source /home/{0}/.dbus_env; {1} ; echo ''; read -p 'Process exited. Press Enter to close...' -r", 
+            "[ -f /home/{0}/.session_env ] && source /home/{0}/.session_env; {1} ; echo ''; read -p 'Process exited. Press Enter to close...' -r", 
             username, escaped_exec
         );
 
@@ -353,7 +350,7 @@ pub fn launch_app(
         }
     } else {
         let container_cmd = format!(
-            "export WAYLAND_DISPLAY=wayland-0 && export XDG_RUNTIME_DIR=/home/{0}/.xdg_run && export NO_AT_BRIDGE=1 && export ELECTRON_OZONE_PLATFORM_HINT=wayland; [ -f /home/{0}/.dbus_env ] && source /home/{0}/.dbus_env; {1}", 
+            "[ -f /home/{0}/.session_env ] && source /home/{0}/.session_env; {1}", 
             username, exec
         );
 
@@ -373,19 +370,60 @@ pub fn launch_app(
     }
 }
 
-pub fn initialize_dbus_session(username: &str) -> (bool, Option<String>) {
-    let env_file = format!("/home/{}/.dbus_env", username);
-    let xdg_dir = format!("/home/{}/.xdg_run", username);
-    let bus_socket = format!("{}/bus", xdg_dir);
 
-    // create a compliant XDG_RUNTIME_DIR and symlink the configured Wayland socket into it
+pub fn initial_session_config(username: &str) -> (bool, Option<String>) {
+    let (env_ok, env_err) = initialize_environment_variables(username);
+    if !env_ok {
+        return (false, env_err);
+    }
+
+    let (dbus_ok, dbus_err) = initialize_dbus_session(username);
+    if !dbus_ok {
+        return (false, dbus_err);
+    }
+
+    (true, None)
+}
+
+fn initialize_environment_variables(username: &str) -> (bool, Option<String>) {
+    let term_env = env::var("TERM").unwrap_or_else(|_| "xterm-256color".to_string());
+    
+    let env_file = format!("/home/{}/.session_env", username);
+    let xdg_dir = format!("/home/{}/.xdg_run", username);
+
+    // create a D-Bus compliant XDG_RUNTIME_DIR and symlink the configured Wayland socket into it
     let _ = run_lxc_shell_cmd(&format!("mkdir -p {}", xdg_dir));
     let _ = run_lxc_shell_cmd(&format!("chown {1}:{1} {0} && chmod 0700 {0}", xdg_dir, username));
     let _ = run_lxc_shell_cmd(&format!("ln -sf /tmp/wayland-0 {}/wayland-0", xdg_dir));
 
+    // always overwrite (with >) the general environment file
+    let write_env = format!(
+        "cat > {0} << 'EOF'\n\
+        export WAYLAND_DISPLAY=wayland-0\n\
+        export XDG_RUNTIME_DIR={1}\n\
+        export TERM={2}\n\
+        export NO_AT_BRIDGE=1\n\
+        export ELECTRON_OZONE_PLATFORM_HINT=wayland\n\
+        EOF\n\
+        chown {3}:{3} {0}",
+        env_file, xdg_dir, term_env, username
+    );
+
+    if let Err(e) = run_lxc_shell_cmd(&write_env) {
+        return (false, Some(format!("Failed to write general environment file: {}", e)));
+    }
+
+    (true, None)
+}
+
+fn initialize_dbus_session(username: &str) -> (bool, Option<String>) {
+    let env_file = format!("/home/{}/.session_env", username);
+    let xdg_dir = format!("/home/{}/.xdg_run", username);
+    let bus_socket = format!("{}/bus", xdg_dir);
+
     // kill leftover daemons owned by the user and remove stale socket
     let _ = run_lxc_shell_cmd(&format!("pkill -9 -u {} -x dbus-daemon", username));
-    let _ = run_lxc_shell_cmd(&format!("rm -f {} {}", env_file, bus_socket));
+    let _ = run_lxc_shell_cmd(&format!("rm -f {}", bus_socket));
 
     // launch the dbus-daemon at a fixed address
     let launch_cmd = format!(
@@ -397,13 +435,15 @@ pub fn initialize_dbus_session(username: &str) -> (bool, Option<String>) {
         return (false, Some(format!("Failed to spawn dbus-daemon: {}", e)));
     }
 
-    // manually write the env file
-    let write_env = format!(
-        "cat > {0} << 'EOF'\nDBUS_SESSION_BUS_ADDRESS='unix:path={1}'\nexport DBUS_SESSION_BUS_ADDRESS\nEOF\nchown {2}:{2} {0}",
-        env_file, bus_socket, username
+    // append (with >>) the D-Bus address
+    let append_env = format!(
+        "cat >> {0} << 'EOF'\n\
+        export DBUS_SESSION_BUS_ADDRESS='unix:path={1}'\n\
+        EOF",
+        env_file, bus_socket
     );
-    if let Err(e) = run_lxc_shell_cmd(&write_env) {
-        return (false, Some(format!("Failed to write dbus env file: {}", e)));
+    if let Err(e) = run_lxc_shell_cmd(&append_env) {
+        return (false, Some(format!("Failed to append dbus env to file: {}", e)));
     }
 
     // check that the socket exists and is reachable
