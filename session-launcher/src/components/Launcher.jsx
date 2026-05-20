@@ -1,10 +1,12 @@
 import { convertFileSrc } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import React, { useState, useEffect } from 'react';
 import { 
     attachTerminal,
     openExplorer,
     getInstalledApps,
     launchApp,
+    startAppWatcher,
  } from '../api';
 import terminalIcon from '../assets/terminal-1.svg';
 import filesIcon from '../assets/files-1.png';
@@ -29,6 +31,7 @@ const AppIcon = ({ app, onClick, onContextMenu }) => {
 export const LauncherView = ({ refreshTrigger }) => {
   const [apps, setApps] = useState([]);
   const [contextMenu, setContextMenu] = useState(null);
+  const [internalTrigger, setInternalTrigger] = useState(0);
 
   // Initialize apps
   useEffect(() => {
@@ -67,7 +70,34 @@ export const LauncherView = ({ refreshTrigger }) => {
     };
 
     loadApps();
-  }, [refreshTrigger]);
+  }, [refreshTrigger, internalTrigger]);
+
+  useEffect(() => {
+    let timeoutId;
+
+    const initWatcher = async () => {
+      await startAppWatcher();
+    };
+
+    // event emitted by Rust
+    const unlistenPromise = listen('apps-changed', () => {
+      
+      // debouncer - packet managers make multiple fast updates instead of only one write
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        console.log("Filesystem quiet, refreshing apps...");
+        setInternalTrigger(prev => prev + 1);
+      }, 1000); 
+      
+    });
+
+    initWatcher();
+
+    return () => {
+      clearTimeout(timeoutId);
+      unlistenPromise.then(unlisten => unlisten());
+    };
+  }, []);
 
   // Close context menu on any global click
   useEffect(() => {

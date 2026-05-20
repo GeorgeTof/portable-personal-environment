@@ -7,6 +7,8 @@ use std::sync::Mutex;
 use std::path::Path;
 use std::env;
 use serde::Serialize;
+use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
+use tauri::Emitter;
 
 use crate::templates::UNMOUNT_SCRIPT;
 use crate::utils::{get_wayland_socket_info, TerminalManager, FileManager, resolve_icon_path, run_lxc_shell_cmd};
@@ -21,6 +23,16 @@ impl SessionState {
         Self {
             current_user: Mutex::new(None),
         }
+    }
+}
+
+pub struct AppWatcherState {
+    pub watcher: Mutex<Option<RecommendedWatcher>>,
+}
+
+impl AppWatcherState {
+    pub fn new() -> Self {
+        Self { watcher: Mutex::new(None) }
     }
 }
 
@@ -230,6 +242,56 @@ pub fn get_installed_apps(state: tauri::State<'_, SessionState>) -> Result<Vec<D
     Ok(apps)
 }
 
+#[tauri::command]
+pub fn start_app_watcher(
+    app_handle: tauri::AppHandle,
+    state: tauri::State<'_, SessionState>,
+    watcher_state: tauri::State<'_, AppWatcherState>,
+) -> (bool, Option<String>) {
+    let mut watcher_guard = watcher_state.watcher.lock().unwrap();
+
+    if watcher_guard.is_some() {
+        return (true, None);
+    }
+
+    let user_lock = state.current_user.lock().unwrap();
+    let username = user_lock.clone().unwrap_or_else(|| "root".to_string());
+
+    let sys_apps = "/mnt/ppe/lxc-data/personal-container/rootfs/usr/share/applications".to_string();
+    let user_apps = format!("/mnt/ppe/lxc-data/personal-container/rootfs/home/{}/.local/share/applications", username);
+
+    // create a channel to receive events from the watcher
+    let (tx, rx) = std::sync::mpsc::channel();
+
+    let mut watcher = match notify::RecommendedWatcher::new(tx, Config::default()) {
+        Ok(w) => w,
+        Err(e) => return (false, Some(format!("Failed to create watcher: {}", e))),
+    };
+
+    if std::path::Path::new(&sys_apps).exists() {
+        let _ = watcher.watch(std::path::Path::new(&sys_apps), RecursiveMode::Recursive);
+    }
+    if std::path::Path::new(&user_apps).exists() {
+        let _ = watcher.watch(std::path::Path::new(&user_apps), RecursiveMode::Recursive);
+    }
+
+    // keep the watcher alive in Tauri's state
+    *watcher_guard = Some(watcher);
+
+    std::thread::spawn(move || {
+        for res in rx {
+            if let Ok(event) = res {
+                if event.kind.is_modify() || event.kind.is_create() || event.kind.is_remove() {
+                    let _ = app_handle.emit("apps-changed", ()); 
+                }
+            }
+        }
+    });
+
+    (true, None)
+}
+
+
 fn parse_desktop_file(path: &Path) -> Option<DesktopApp> {
     let content = fs::read_to_string(path).ok()?;
     
@@ -313,6 +375,7 @@ fn apply_wayland_flags(exec: &str) -> String {
         format!("{} {} {}", bin, flags, rest)
     }
 }
+
 
 #[tauri::command]
 pub fn launch_app(

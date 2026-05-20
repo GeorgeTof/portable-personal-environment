@@ -14,6 +14,7 @@ pub fn run() {
         .manage(TerminalManager::new())
         .manage(utils::FileManager::new())
         .manage(SessionState::new())
+        .manage(session::AppWatcherState::new())
         .invoke_handler(tauri::generate_handler![
             checks::check_host_config,
             checks::check_drive_configuration,
@@ -29,6 +30,7 @@ pub fn run() {
             session::attach_terminal,
             session::open_explorer,
             session::get_installed_apps,
+            session::start_app_watcher,
             session::launch_app,
             utils::get_blacklisted_users,
         ])
