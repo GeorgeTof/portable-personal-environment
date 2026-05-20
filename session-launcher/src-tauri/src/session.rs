@@ -9,7 +9,7 @@ use std::env;
 use serde::Serialize;
 
 use crate::templates::UNMOUNT_SCRIPT;
-use crate::utils::{get_wayland_socket_info, TerminalManager, FileManager, resolve_icon_path};
+use crate::utils::{get_wayland_socket_info, TerminalManager, FileManager, resolve_icon_path, run_lxc_shell_cmd};
 
 
 pub struct SessionState {
@@ -162,7 +162,7 @@ pub fn attach_terminal(
     let term_env = env::var("TERM").unwrap_or_else(|_| "xterm-256color".to_string());
 
     let lxc_cmd = format!(
-        "exec lxc-attach -n personal-container -P /mnt/ppe/lxc-data --clear-env -- sudo -u {0} bash -c 'export WAYLAND_DISPLAY=wayland-0 && export XDG_RUNTIME_DIR=/tmp && export TERM={1} && cd /home/{0} && exec bash -il'",
+        "exec lxc-attach -n personal-container -P /mnt/ppe/lxc-data --clear-env -- sudo -u {0} bash -c 'export WAYLAND_DISPLAY=wayland-0 && export XDG_RUNTIME_DIR=/home/{0}/.xdg_run && export TERM={1} && export NO_AT_BRIDGE=1; [ -f /home/{0}/.dbus_env ] && source /home/{0}/.dbus_env; cd /home/{0} && exec bash -i'",
         username, term_env
     );
 
@@ -303,14 +303,14 @@ pub fn launch_app(
         // escape single quotes for safe injection into bash -c '...'
         let escaped_exec = exec.replace('\'', "'\\''");
         
-        // so the terminal doesn't close instantly if the app crashes
+        // so the variables are exported safely && terminal doesn't close instantly if the app crashes
         let container_cmd = format!(
-            "{} ; echo ''; read -p 'Process exited. Press Enter to close...' -r", 
-            escaped_exec
+            "export WAYLAND_DISPLAY=wayland-0 && export XDG_RUNTIME_DIR=/home/{0}/.xdg_run && export NO_AT_BRIDGE=1; [ -f /home/{0}/.dbus_env ] && source /home/{0}/.dbus_env; {1} ; echo ''; read -p 'Process exited. Press Enter to close...' -r", 
+            username, escaped_exec
         );
 
         let lxc_cmd = format!(
-            "exec lxc-attach -n personal-container -P /mnt/ppe/lxc-data --clear-env -- sudo -u {} WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/tmp bash -c '{}'",
+            "exec lxc-attach -n personal-container -P /mnt/ppe/lxc-data --clear-env -- sudo -u {} bash -c '{}'",
             username, container_cmd
         );
 
@@ -320,15 +320,18 @@ pub fn launch_app(
             Err(e) => (false, Some(e)),
         }
     } else {
+        let container_cmd = format!(
+            "export WAYLAND_DISPLAY=wayland-0 && export XDG_RUNTIME_DIR=/home/{0}/.xdg_run && export NO_AT_BRIDGE=1; [ -f /home/{0}/.dbus_env ] && source /home/{0}/.dbus_env; {1}", 
+            username, exec
+        );
+
         let status = Command::new("lxc-attach")
             .arg("-n").arg("personal-container")
             .arg("-P").arg("/mnt/ppe/lxc-data")
             .arg("--clear-env")
             .arg("--")
             .arg("sudo").arg("-u").arg(&username)
-            .arg("WAYLAND_DISPLAY=wayland-0")
-            .arg("XDG_RUNTIME_DIR=/tmp")
-            .arg("bash").arg("-c").arg(&exec)
+            .arg("bash").arg("-c").arg(&container_cmd)
             .spawn(); 
 
         match status {
@@ -336,4 +339,49 @@ pub fn launch_app(
             Err(e) => (false, Some(format!("Failed to spawn background app: {}", e))),
         }
     }
+}
+
+pub fn initialize_dbus_session(username: &str) -> (bool, Option<String>) {
+    let env_file = format!("/home/{}/.dbus_env", username);
+    let xdg_dir = format!("/home/{}/.xdg_run", username);
+    let bus_socket = format!("{}/bus", xdg_dir);
+
+    // create a compliant XDG_RUNTIME_DIR and symlink the configured Wayland socket into it
+    let _ = run_lxc_shell_cmd(&format!("mkdir -p {}", xdg_dir));
+    let _ = run_lxc_shell_cmd(&format!("chown {1}:{1} {0} && chmod 0700 {0}", xdg_dir, username));
+    let _ = run_lxc_shell_cmd(&format!("ln -sf /tmp/wayland-0 {}/wayland-0", xdg_dir));
+
+    // kill leftover daemons owned by the user and remove stale socket
+    let _ = run_lxc_shell_cmd(&format!("pkill -9 -u {} -x dbus-daemon", username));
+    let _ = run_lxc_shell_cmd(&format!("rm -f {} {}", env_file, bus_socket));
+
+    // launch the dbus-daemon at a fixed address
+    let launch_cmd = format!(
+        "sudo -u {0} bash -c 'XDG_RUNTIME_DIR={1} dbus-daemon --session --address=unix:path={2} --fork </dev/null >/dev/null 2>&1'",
+        username, xdg_dir, bus_socket
+    );
+
+    if let Err(e) = run_lxc_shell_cmd(&launch_cmd) {
+        return (false, Some(format!("Failed to spawn dbus-daemon: {}", e)));
+    }
+
+    // manually write the env file
+    let write_env = format!(
+        "cat > {0} << 'EOF'\nDBUS_SESSION_BUS_ADDRESS='unix:path={1}'\nexport DBUS_SESSION_BUS_ADDRESS\nEOF\nchown {2}:{2} {0}",
+        env_file, bus_socket, username
+    );
+    if let Err(e) = run_lxc_shell_cmd(&write_env) {
+        return (false, Some(format!("Failed to write dbus env file: {}", e)));
+    }
+
+    // check that the socket exists and is reachable
+    let verify_cmd = format!(
+        "sudo -u {0} bash -c 'XDG_RUNTIME_DIR={1} DBUS_SESSION_BUS_ADDRESS=unix:path={2} dbus-send --session --dest=org.freedesktop.DBus --type=method_call --print-reply /org/freedesktop/DBus org.freedesktop.DBus.ListNames > /dev/null'",
+        username, xdg_dir, bus_socket
+    );
+    if let Err(e) = run_lxc_shell_cmd(&verify_cmd) {
+        return (false, Some(format!("D-Bus session started but is not reachable: {}", e)));
+    }
+
+    (true, None)
 }

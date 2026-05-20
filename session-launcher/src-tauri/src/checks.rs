@@ -5,7 +5,7 @@ use std::process::Command;
 
 use crate::configure::{configure_acls, configure_wayland_access};
 use crate::utils::{run_lxc_shell_cmd, get_blacklisted_users};
-use crate::session::SessionState;
+use crate::session::{SessionState, initialize_dbus_session};
 
 #[tauri::command]
 pub fn check_host_config() -> (bool, Option<String>) {
@@ -140,6 +140,15 @@ let check_cmd = "getent passwd | awk -F: '$3 >= 1000 && $3 < 65534 {print $1}'";
             if u.is_empty() { continue; }
 
             if !blacklist.contains(&u.to_string()) {
+                let (dbus_ok, dbus_err) = initialize_dbus_session(&u.to_string());
+                if !dbus_ok {
+                    println!("Error starting runtime D-Bus: {:?}", dbus_err);
+                    let _ = std::process::Command::new("notify-send")
+                        .arg("PPE Launcher Warning")
+                        .arg("Failed to initialize the D-Bus.")
+                        .status();
+                }
+
                 // cache the found valid user
                 let mut lock = state.current_user.lock().unwrap();
                 *lock = Some(u.to_string());

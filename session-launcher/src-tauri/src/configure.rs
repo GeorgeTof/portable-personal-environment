@@ -5,7 +5,7 @@ use std::process::Command;
 use crate::templates::PPE_DEFAULT_CONF;
 use crate::checks::has_acl;
 use crate::utils::{get_wayland_socket_info, TerminalManager, run_lxc_shell_cmd, get_blacklisted_users};
-use crate::session::SessionState;
+use crate::session::{SessionState, initialize_dbus_session};
 
 #[tauri::command]
 // return must be wrapped in result for async command with borrowed parameter, but is deserialized the same in frontend
@@ -98,13 +98,22 @@ pub fn configure_user(
         return (false, Some(format!("Failed to set portable permissions on home directory: {}", e)));
     }
 
+    // install the prerequisites (currently only for D-Bus configuration)
+    if let Err(e) = install_container_prerequisites() {
+        return (false, Some(format!("Prerequisite installation failure: {}", e)));
+    }
+
+    // initialize the D-Bus session
+    let (dbus_ok, dbus_err) = initialize_dbus_session(&username);
+    if !dbus_ok {
+        return (false, dbus_err);
+    }
+
     let mut lock = state.current_user.lock().unwrap();
     *lock = Some(username);
 
     (true, None)
 }
-
-
 
 pub fn configure_wayland_access() -> (bool, Option<String>) {
     let (runtime_dir, wayland_display) = match get_wayland_socket_info() {
@@ -163,4 +172,39 @@ pub fn configure_acls(path: &str) -> Result<(), String> {
     } else {
         Err(format!("setfacl returned non-zero status for {}", path))
     }
+}
+
+fn install_container_prerequisites() -> Result<(), String> {
+    let os_release = run_lxc_shell_cmd("cat /etc/os-release")?;
+    
+    let mut distro_target = String::new();
+    for line in os_release.lines() {
+        if line.starts_with("ID_LIKE=") || (line.starts_with("ID=") && distro_target.is_empty()){
+            distro_target = line.split('=').nth(1).unwrap_or("").replace('"', "").to_lowercase();
+        }
+    }
+
+    let install_cmd = if distro_target.contains("debian") || distro_target.contains("ubuntu") {
+        "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y dbus dbus-x11 dconf-gsettings-backend"
+    } else if distro_target.contains("fedora") || distro_target.contains("rhel") {
+        "dnf install -y dbus dbus-x11 dbus-tools dconf"
+    } else if distro_target.contains("arch") {
+        "pacman -Sy --noconfirm dbus dconf"
+    } else if distro_target.contains("suse") {
+        "zypper --non-interactive install dbus-1 dbus-1-x11 dconf"
+    } else {
+        let _ = std::process::Command::new("notify-send")
+            .arg("PPE Launcher Warning")
+            .arg("The container distribution family is not supported for automatic D-Bus configuration.")
+            .status();
+        return Ok(());
+    };
+
+    println!("Installing D-Bus prerequisites inside container for the found distribution: {}", distro_target);
+    run_lxc_shell_cmd(install_cmd)?;
+
+    // generate the system ID and create a symlink to it in a second standard location
+    let _ = run_lxc_shell_cmd("dbus-uuidgen --ensure && ln -sf /var/lib/dbus/machine-id /etc/machine-id");
+
+    Ok(())
 }
