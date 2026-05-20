@@ -162,7 +162,7 @@ pub fn attach_terminal(
     let term_env = env::var("TERM").unwrap_or_else(|_| "xterm-256color".to_string());
 
     let lxc_cmd = format!(
-        "exec lxc-attach -n personal-container -P /mnt/ppe/lxc-data --clear-env -- sudo -u {0} bash -c 'export WAYLAND_DISPLAY=wayland-0 && export XDG_RUNTIME_DIR=/home/{0}/.xdg_run && export TERM={1} && export NO_AT_BRIDGE=1; [ -f /home/{0}/.dbus_env ] && source /home/{0}/.dbus_env; cd /home/{0} && exec bash -i'",
+        "exec lxc-attach -n personal-container -P /mnt/ppe/lxc-data --clear-env -- sudo -u {0} bash -c 'export WAYLAND_DISPLAY=wayland-0 && export XDG_RUNTIME_DIR=/home/{0}/.xdg_run && export TERM={1} && export NO_AT_BRIDGE=1 && export ELECTRON_OZONE_PLATFORM_HINT=wayland; [ -f /home/{0}/.dbus_env ] && source /home/{0}/.dbus_env; cd /home/{0} && exec bash -i'",
         username, term_env
     );
 
@@ -259,12 +259,13 @@ fn parse_desktop_file(path: &Path) -> Option<DesktopApp> {
         } else if line.starts_with("Exec=") && exec.is_empty() {
             let raw_exec = line["Exec=".len()..].to_string();
             // strip out file/url arguments that break the command -> TODO - check if this brakes apps
-            exec = raw_exec
+            let stripped = raw_exec
                 .replace("%u", "").replace("%U", "")
                 .replace("%f", "").replace("%F", "")
                 .replace("%c", "").replace("%k", "")
                 .trim()
                 .to_string();
+            exec = apply_wayland_flags(&stripped);
         } else if line.starts_with("Icon=") && icon.is_empty() {
             icon = line["Icon=".len()..].to_string();
         } else if line.starts_with("NoDisplay=true") {
@@ -283,6 +284,37 @@ fn parse_desktop_file(path: &Path) -> Option<DesktopApp> {
         icon: resolve_icon_path(&icon),
         is_custom: false,
     })
+}
+
+fn apply_wayland_flags(exec: &str) -> String {
+    let binary = exec.split_whitespace().next().unwrap_or("");
+    let binary_name = std::path::Path::new(binary)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("");
+
+    let needs_ozone_flags = matches!(
+        binary_name,
+        "google-chrome" | "google-chrome-stable" | "chrome"
+        | "chromium" | "chromium-browser"
+        | "code" | "code-insiders" | "codium" | "vscodium"
+        | "brave-browser" | "brave"
+        | "microsoft-edge" | "microsoft-edge-stable"
+    );
+
+    if !needs_ozone_flags {
+        return exec.to_string();
+    }
+
+    let mut parts = exec.splitn(2, char::is_whitespace);
+    let bin = parts.next().unwrap_or("");
+    let rest = parts.next().unwrap_or("");
+    let flags = "--enable-features=UseOzonePlatform --ozone-platform=wayland";
+    if rest.is_empty() {
+        format!("{} {}", bin, flags)
+    } else {
+        format!("{} {} {}", bin, flags, rest)
+    }
 }
 
 #[tauri::command]
@@ -305,7 +337,7 @@ pub fn launch_app(
         
         // so the variables are exported safely && terminal doesn't close instantly if the app crashes
         let container_cmd = format!(
-            "export WAYLAND_DISPLAY=wayland-0 && export XDG_RUNTIME_DIR=/home/{0}/.xdg_run && export NO_AT_BRIDGE=1; [ -f /home/{0}/.dbus_env ] && source /home/{0}/.dbus_env; {1} ; echo ''; read -p 'Process exited. Press Enter to close...' -r", 
+            "export WAYLAND_DISPLAY=wayland-0 && export XDG_RUNTIME_DIR=/home/{0}/.xdg_run && export NO_AT_BRIDGE=1 && export ELECTRON_OZONE_PLATFORM_HINT=wayland; [ -f /home/{0}/.dbus_env ] && source /home/{0}/.dbus_env; {1} ; echo ''; read -p 'Process exited. Press Enter to close...' -r", 
             username, escaped_exec
         );
 
@@ -321,7 +353,7 @@ pub fn launch_app(
         }
     } else {
         let container_cmd = format!(
-            "export WAYLAND_DISPLAY=wayland-0 && export XDG_RUNTIME_DIR=/home/{0}/.xdg_run && export NO_AT_BRIDGE=1; [ -f /home/{0}/.dbus_env ] && source /home/{0}/.dbus_env; {1}", 
+            "export WAYLAND_DISPLAY=wayland-0 && export XDG_RUNTIME_DIR=/home/{0}/.xdg_run && export NO_AT_BRIDGE=1 && export ELECTRON_OZONE_PLATFORM_HINT=wayland; [ -f /home/{0}/.dbus_env ] && source /home/{0}/.dbus_env; {1}", 
             username, exec
         );
 
