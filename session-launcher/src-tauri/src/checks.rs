@@ -124,8 +124,114 @@ pub fn check_container_integrity() -> (bool, Option<String>) {
 }
 
 #[tauri::command]
-pub fn check_container_runtime_integrity() -> (bool, Option<String>) {
-    // TODO
+pub fn check_container_runtime_integrity(
+    state: tauri::State<'_, SessionState>,
+) -> (bool, Option<String>) {
+    let user_lock = state.current_user.lock().unwrap();
+    let username = user_lock.clone(); // may be None on first run
+    drop(user_lock);
+
+    // --- Systemd health
+    // skip silently if systemctl is absent
+    if run_lxc_shell_cmd("command -v systemctl").is_ok() {
+        let mut last = String::new();
+        for _ in 0..40 {
+            match run_lxc_shell_cmd("systemctl is-system-running || true") {
+                Ok(state) => {
+                    let s = state.trim().to_string();
+                    last = s.clone();
+                    match s.as_str() {
+                        "running" | "degraded" => break,
+                        "starting" | "initializing" | "" => {
+                            std::thread::sleep(std::time::Duration::from_millis(500));
+                            continue;
+                        }
+                        _ => break,
+                    }
+                }
+                Err(e) => { last = e; break; }
+            }
+        }
+        match last.as_str() {
+            "running" | "degraded" => {}
+            other => return (false, Some(format!("init: systemd state is '{}'.", other))),
+        }
+    }
+
+    // --- Wayland socket: existence
+    match run_lxc_shell_cmd("test -S /tmp/wayland-0 && echo ok") {
+        Ok(out) if out.trim() == "ok" => {}
+        _ => return (false, Some("GUI: Wayland socket /tmp/wayland-0 missing or not a socket.".to_string())),
+    }
+
+    // --- Wayland socket: user-perspective read/write
+    // must run as the actual user, not root
+    if let Some(ref u) = username {
+        let cmd = format!(
+            "sudo -u {} bash -c 'test -r /tmp/wayland-0 && test -w /tmp/wayland-0 && echo ok'",
+            u
+        );
+        match run_lxc_shell_cmd(&cmd) {
+            Ok(out) if out.trim() == "ok" => {}
+            _ => return (false, Some(format!(
+                "GUI: user '{}' cannot read/write /tmp/wayland-0. Check host ACLs for UID 101000.", u
+            ))),
+        }
+    }
+
+    // --- GPU passthrough: enumerate and verify access per device
+    if let Ok(listing) = run_lxc_shell_cmd("ls /dev/dri 2>/dev/null") {
+        let devices: Vec<&str> = listing
+            .lines()
+            .map(|s| s.trim())
+            .filter(|s| s.starts_with("card") || s.starts_with("render"))
+            .collect();
+
+        if !devices.is_empty() {
+            if let Some(ref u) = username {
+                let mut has_gpu_access = false;
+                let mut failed_devices = Vec::new();
+
+                for dev in &devices {
+                    let path = format!("/dev/dri/{}", dev);
+                    let cmd = format!(
+                        "sudo -u {0} bash -c 'test -r {1} && test -w {1} && echo ok'",
+                        u, path
+                    );
+                    match run_lxc_shell_cmd(&cmd) {
+                        Ok(out) if out.trim() == "ok" => {
+                            has_gpu_access = true;
+                        }
+                        _ => {
+                            failed_devices.push(path);
+                        }
+                    }
+                }
+
+                // fail only if devices were found, but the user has access to none of them
+                if !has_gpu_access {
+                    return (false, Some(format!(
+                        "GPU: user '{}' cannot read/write any devices in /dev/dri. Failed on: {:?}",
+                        u, failed_devices
+                    )));
+                } 
+            }
+        }
+    }
+
+    // --- Network: IPv4
+    match run_lxc_shell_cmd("ip -4 -o addr show scope global | grep -v ' lo '") {
+        Ok(out) if !out.trim().is_empty() => {}
+        _ => return (false, Some("Network: container has no IPv4 address.".to_string())),
+    }
+
+    // --- Network: external reachability
+    let net_check = "timeout 2 bash -c '</dev/tcp/1.1.1.1/53' 2>/dev/null && echo ok";
+    match run_lxc_shell_cmd(net_check) {
+        Ok(out) if out.trim() == "ok" => {}
+        _ => return (false, Some("Network: cannot reach external hosts (TCP to 1.1.1.1:53 failed).".to_string())),
+    }
+
     (true, None)
 }
 

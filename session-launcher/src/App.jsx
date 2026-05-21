@@ -97,12 +97,7 @@ function App() {
       return;
     }
     
-    if (!(await checkContainerRuntimeIntegrity())) {
-      setStartError("Container runtime integrity check failed.");
-      setViewState('ready');
-      setFooterState('unmount');
-      return;
-    }
+    // container runtime integrity as optional launcher button
     
     if (!(await checkConfiguredForPersonalUse())) {
       setViewState('setupUser');
@@ -155,6 +150,22 @@ function App() {
   const handleRefresh = () => {
     console.log("Refreshing the GUI applications list");
     setRefreshTrigger(prev => prev + 1);
+  };
+
+  const handleRuntimeCheck = async () => {
+    const success = await checkContainerRuntimeIntegrity();
+    
+    if (success) {
+      const message = [
+        "All of the tests passed:",
+        "- - Systemd health",
+        "- - Wayland socket access",
+        "- - GPU passthrough",
+        "- - IPv4 address assignment and external network reachability"
+      ].join("\n\n  ");
+
+      alert(message);
+    }
   };
 
 
@@ -243,6 +254,8 @@ function App() {
         onStop={handleStop}
         showRefresh={viewState === 'launcher'}
         onRefresh={handleRefresh}
+        showRuntimeCheck={viewState === 'launcher'}
+        onRuntimeCheck={handleRuntimeCheck}
       />
     </div>
   );

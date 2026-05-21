@@ -1,6 +1,6 @@
 import React from 'react';
 
-export const Footer = ({ actionState, onUnmount, onStop, showRefresh, onRefresh }) => {
+export const Footer = ({ actionState, onUnmount, onStop, showRefresh, onRefresh, showRuntimeCheck, onRuntimeCheck }) => {
   return (
     <div className="footer">
       <div className="footer-left">
@@ -16,6 +16,11 @@ export const Footer = ({ actionState, onUnmount, onStop, showRefresh, onRefresh 
         )}
       </div>
       <div className="footer-right">
+        {showRuntimeCheck && (
+          <button className="btn" onClick={onRuntimeCheck} style={{ backgroundColor: '#45475a', color: '#cdd6f4', marginRight: '10px' }}>
+            Check Integrity
+          </button>
+        )}
         {showRefresh && (
           <button className="btn" onClick={onRefresh} style={{ backgroundColor: '#45475a', color: '#cdd6f4' }}>
             Refresh
