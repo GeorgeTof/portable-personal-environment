@@ -13,11 +13,23 @@ import filesIcon from '../assets/files-1.png';
 
 // Individual Icon Component
 const AppIcon = ({ app, onClick, onContextMenu }) => {
+  // for keyboard navigation
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault(); // prevents the apacebar from scrolling the page down
+      onClick(app);
+    }
+  };
+
   return (
     <div 
       className="app-icon-container" 
       onClick={() => onClick(app)}
       onContextMenu={(e) => onContextMenu(e, app)}
+      tabIndex="0"
+      role="button"
+      onKeyDown={handleKeyDown} 
+      aria-label={`Launch ${app.name}`}
     >
       <div className="app-icon-image">
         <img src={app.icon} alt={app.name} className={app.isCustom ? "builtin-icon" : ""} />
