@@ -255,7 +255,8 @@ function App() {
         actionState={footerState} 
         onUnmount={handleUnmount} 
         onStop={handleStop}
-        showRefresh={viewState === 'launcher'}
+        // showRefresh={viewState === 'launcher'} // - - only needed for debugging, as refreshing is done automatically
+        showRefresh={false}
         onRefresh={handleRefresh}
         showRuntimeCheck={viewState === 'launcher'}
         onRuntimeCheck={handleRuntimeCheck}

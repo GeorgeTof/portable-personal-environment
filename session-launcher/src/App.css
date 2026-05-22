@@ -43,6 +43,16 @@ body, html, #root {
   border-top: 1px solid #313244;
 }
 
+.btn.secondary { 
+  background-color: #45475a; 
+  color: #cdd6f4; 
+}
+
+.footer-right {
+  display: flex;
+  gap: 10px;
+}
+
 /* Basic Buttons */
 .btn {
   padding: 0.75rem 1.5rem;

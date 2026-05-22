@@ -21,12 +21,12 @@ export const Footer = ({ actionState, onUnmount, onStop, showRefresh, onRefresh,
       </div>
       <div className="footer-right">
         {showRuntimeCheck && (
-          <button className="btn" onClick={onRuntimeCheck} style={{ backgroundColor: '#45475a', color: '#cdd6f4', marginRight: '10px' }}>
+          <button className="btn secondary" onClick={onRuntimeCheck}>
             Check Integrity
           </button>
         )}
         {showRefresh && (
-          <button className="btn" onClick={onRefresh} style={{ backgroundColor: '#45475a', color: '#cdd6f4' }}>
+          <button className="btn secondary" onClick={onRefresh}>
             Refresh
           </button>
         )}
