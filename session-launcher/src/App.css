@@ -242,7 +242,6 @@ body, html, #root {
 .search-icon {
   width: 20px;
   height: 20px;
-  fill: #a6adc8; /* check */
   margin-right: 12px;
   flex-shrink: 0;
 }
@@ -253,7 +252,7 @@ body, html, #root {
   border: none;
   color: #cdd6f4;
   font-size: 1rem;
-  outline: none; /* check */
+  outline: none;
 }
 
 .search-input::placeholder {
