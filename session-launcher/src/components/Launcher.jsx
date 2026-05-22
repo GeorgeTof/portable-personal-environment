@@ -10,6 +10,7 @@ import {
  } from '../api';
 import terminalIcon from '../assets/terminal-1.svg';
 import filesIcon from '../assets/files-1.png';
+import searchIcon from '../assets/search-icon.svg';
 
 // Individual Icon Component
 const AppIcon = ({ app, onClick, onContextMenu }) => {
@@ -165,13 +166,11 @@ export const LauncherView = ({ refreshTrigger }) => {
     <div className="view-container launcher-view">
       <div className="search-wrapper">
         <div className="search-container">
-          <svg 
+          <img 
+            src={searchIcon} 
+            alt="Search" 
             className="search-icon" 
-            viewBox="0 0 24 24" 
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <path d="M21.71 20.29L18 16.61A9 9 0 1 0 16.61 18l3.68 3.68a1 1 0 0 0 1.42 0 1 1 0 0 0 0-1.39zM11 18a7 7 0 1 1 7-7 7 7 0 0 1-7 7z"/>
-          </svg>
+          />
           <input 
             type="text" 
             className="search-input" 
