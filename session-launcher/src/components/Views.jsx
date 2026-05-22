@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   getBlacklistedUsers,
 } from '../api';
+import powerIcon from '../assets/on-off-button-icon.svg';
 
 export const LoadingView = () => (
   <div className="view-container">
@@ -45,7 +46,8 @@ export const StartView = ({ onStart, errorMessage }) => (
   <div className="view-container">
     {errorMessage && <div className="error-message">{errorMessage}</div>}
     <button className="btn start-btn" onClick={onStart}>
-      START
+      <img src={powerIcon} alt="Power Icon" className="start-icon" />
+      <span className="start-text">START</span>
     </button>
   </div>
 );

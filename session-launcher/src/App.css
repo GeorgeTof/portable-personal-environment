@@ -62,10 +62,25 @@ body, html, #root {
 .start-btn {
   background-color: #a6e3a1;
   color: #11111b;
-  font-size: 2rem;
-  padding: 2rem 4rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 1.5rem 2.5rem;
   border-radius: 16px;
   box-shadow: 0 4px 15px rgba(166, 227, 161, 0.2);
+}
+
+.start-icon {
+  width: 72px;
+  height: 72px;
+}
+
+.start-text {
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: normal;
 }
 
 /* Simple Loading Spinner */
