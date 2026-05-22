@@ -158,6 +158,19 @@ export const LauncherView = ({ refreshTrigger }) => {
     setContextMenu(null);
   };
 
+  const handleCopyPath = async () => {
+    if (!contextMenu?.app) return;
+    
+    try {
+      console.log("Executable path:", contextMenu.app.exec);
+      await navigator.clipboard.writeText(contextMenu.app.exec);
+    } catch (err) {
+      console.error("Failed to copy to clipboard:", err);
+    }
+    
+    setContextMenu(null);
+  };
+
   const filteredApps = apps.filter(app => 
     app.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -207,11 +220,8 @@ export const LauncherView = ({ refreshTrigger }) => {
           <div className="context-menu-item" onClick={handleLaunchWithTerminal}>
             Launch with terminal attached
           </div>
-          <div className="context-menu-item" onClick={() => {
-            console.log("Executable path:", contextMenu.app.exec);
-            setContextMenu(null);
-          }}>
-            Copy executable path
+          <div className="context-menu-item" onClick={handleCopyPath}>
+            Copy executable name
           </div>
         </div>
       )}
