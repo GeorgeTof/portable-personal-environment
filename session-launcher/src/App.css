@@ -83,6 +83,20 @@ body, html, #root {
   letter-spacing: normal;
 }
 
+.flex-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.small-btn-icon {
+  width: 26px;
+  height: 26px;
+  margin-top: -6px;
+  margin-bottom: -6px;
+}
+
 /* Simple Loading Spinner */
 .spinner {
   width: 40px;
