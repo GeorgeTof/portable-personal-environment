@@ -47,11 +47,11 @@ pub async fn create_environment(terminal_manager: tauri::State<'_, TerminalManag
 }
 
 #[tauri::command]
-pub fn configure_user(
+pub async fn configure_user(
     username: String, 
     password: String, 
     state: tauri::State<'_, SessionState>
-) -> (bool, Option<String>) {
+) -> Result<(bool, Option<String>), String> {
     let check_cmd = "getent passwd | awk -F: '$3 >= 1000 && $3 < 65534 {print $1}'";
     let blacklist = get_blacklisted_users();
 
@@ -68,7 +68,7 @@ pub fn configure_user(
                 // if somehow the custom user was not yet detected, cache it now
                 let mut lock = state.current_user.lock().unwrap();
                 *lock = Some(u.to_string());
-                return (true, None);
+                return Ok((true, None));
             }
         }
     }
@@ -76,43 +76,43 @@ pub fn configure_user(
     // create the custom user
     let create_cmd = format!("useradd -m -s /bin/bash {}", username);
     if let Err(e) = run_lxc_shell_cmd(&create_cmd) {
-        return (false, Some(format!("Failed to create user: {}", e)));
+        return Ok((false, Some(format!("Failed to create user: {}", e))));
     }
 
     // add to the admin group
     let group_cmd = format!("usermod -aG sudo {0} 2>/dev/null || usermod -aG wheel {0} 2>/dev/null", username);
     if let Err(e) = run_lxc_shell_cmd(&group_cmd) {
-        return (false, Some(format!("Failed to assign admin permissions: {}", e)));
+        return Ok((false, Some(format!("Failed to assign admin permissions: {}", e))));
     }
 
     // changing the password
     // !! obs !! the password doesn't allow single quotes as it brakes the command
     let pass_cmd = format!("echo '{}:{}' | chpasswd", username, password);
     if let Err(e) = run_lxc_shell_cmd(&pass_cmd) {
-        return (false, Some(format!("Failed to set password: {}", e)));
+        return Ok((false, Some(format!("Failed to set password: {}", e))));
     }
 
     // make the home directory accessible by the host file manager
     let chmod_cmd = format!("chmod -R o+rwx /home/{}", username);
     if let Err(e) = run_lxc_shell_cmd(&chmod_cmd) {
-        return (false, Some(format!("Failed to set portable permissions on home directory: {}", e)));
+        return Ok((false, Some(format!("Failed to set portable permissions on home directory: {}", e))));
     }
 
     // install the prerequisites (currently only for D-Bus configuration)
     if let Err(e) = install_container_prerequisites() {
-        return (false, Some(format!("Prerequisite installation failure: {}", e)));
+        return Ok((false, Some(format!("Prerequisite installation failure: {}", e))));
     }
 
     // initialize the D-Bus session
     let (dbus_ok, dbus_err) = initial_session_config(&username);
     if !dbus_ok {
-        return (false, dbus_err);
+        return Ok((false, dbus_err));
     }
 
     let mut lock = state.current_user.lock().unwrap();
     *lock = Some(username);
 
-    (true, None)
+    Ok((true, None))
 }
 
 pub fn configure_wayland_access() -> (bool, Option<String>) {

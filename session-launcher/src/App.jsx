@@ -17,7 +17,8 @@ import {
 } from './api';
 import { 
   LoadingView,
-  StartingUpView, 
+  StartingUpView,
+  LoadingSetupUserView,
   HostErrorView, 
   EnvironmentActionView, 
   StartView,
@@ -136,7 +137,7 @@ function App() {
   };
 
   const handleConfigureUser = async (username, password) => {
-    setViewState('loading');
+    setViewState('loadingSetupUser');
     const success = await configureUser(username, password);
     
     if (success) {
@@ -175,6 +176,8 @@ function App() {
         return <LoadingView />;
       case 'startingUp': 
         return <StartingUpView />;
+      case 'loadingSetupUser':
+        return <LoadingSetupUserView />;
       case 'hostError': 
         return <HostErrorView />;
       case 'missingEnv': 

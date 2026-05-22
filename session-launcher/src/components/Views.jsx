@@ -17,6 +17,13 @@ export const StartingUpView = () => (
   </div>
 );
 
+export const LoadingSetupUserView = () => (
+  <div className="view-container">
+    <h2>Setting up the new user...</h2>
+    <div className="spinner"></div>
+  </div>
+);
+
 export const HostErrorView = () => (
   <div className="view-container">
     <h2>Host Configuration Error</h2>
