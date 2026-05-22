@@ -397,7 +397,7 @@ pub fn launch_app(
         
         // so the variables are exported safely && terminal doesn't close instantly if the app crashes
         let container_cmd = format!(
-            "[ -f /home/{0}/.session_env ] && source /home/{0}/.session_env; {1} ; echo ''; read -p 'Process exited. Press Enter to close...' -r", 
+            "[ -f /home/{0}/.session_env ] && source /home/{0}/.session_env; {1} ; echo ''; read -p \"Process exited. Press Enter to close...\" -r",
             username, escaped_exec
         );
 

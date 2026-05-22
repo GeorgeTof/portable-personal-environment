@@ -56,14 +56,16 @@ impl TerminalManager {
         let status = match terminal.as_str() {
             "gnome-terminal" => {
                 // gnome-terminal deprecated the -e flag in favor of --
+                // obs! not tested on the new gnome terminal! -> todo check!
                 Command::new(terminal)
+                    .arg("--wait")
                     .arg("--")
                     .arg("bash")
                     .arg("-c")
                     .arg(command)
                     .status()
             },
-            "alacritty" | "kitty" => {
+            "alacritty" | "kitty" | "konsole" => {
                 Command::new(terminal)
                     .arg("-e")
                     .arg("bash")
@@ -72,7 +74,8 @@ impl TerminalManager {
                     .status()
             },
             _ => {
-                // standard fallback (for x-terminal-emulator, konsole, xfce4-terminal)
+                // standard fallback (for x-terminal-emulator, xfce4-terminal)
+                // obs! xfce4-terminal may have some special parsing rules -> todo check!
                 Command::new(terminal)
                     .arg("-e")
                     .arg(command)
@@ -90,13 +93,14 @@ impl TerminalManager {
         let status = match terminal.as_str() {
             "gnome-terminal" => {
                 Command::new(terminal)
+                    .arg("--wait")
                     .arg("--")
                     .arg("bash")
                     .arg("-c")
                     .arg(command)
                     .spawn()
             },
-            "alacritty" | "kitty" => {
+            "alacritty" | "kitty" |"konsole" => {
                 Command::new(terminal)
                     .arg("-e")
                     .arg("bash")
@@ -126,16 +130,17 @@ impl TerminalManager {
             }
 
             let terminals = [
-                "x-terminal-emulator", // Debian/Ubuntu default wrapper
                 "gnome-terminal",      // Standard GNOME
                 "konsole",             // Standard KDE
                 "xfce4-terminal",      // Standard XFCE
                 "alacritty",           // Popular custom
-                "kitty"                // Popular custom
+                "kitty",               // Popular custom
+                "x-terminal-emulator", // Debian/Ubuntu default wrapper
             ];
             
             for term in terminals {
                 if Self::command_exists(term) {
+                    println!("[terminal] selected: {}", term);
                     *lock = Some(term.to_string());
                     return Ok(term.to_string());
                 }
