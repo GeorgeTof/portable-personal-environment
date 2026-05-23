@@ -29,6 +29,7 @@ pub fn run() {
             session::unmount_drive,
             session::attach_terminal,
             session::open_explorer,
+            session::open_shared,
             session::get_installed_apps,
             session::start_app_watcher,
             session::launch_app,

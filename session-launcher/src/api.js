@@ -60,6 +60,7 @@ export const startContainer = () => runTauriCommand('start_container');
 export const unmountDrive = () => runTauriCommand('unmount_drive');
 export const attachTerminal = () => runTauriCommand('attach_terminal');
 export const openExplorer = () => runTauriCommand('open_explorer');
+export const openShared = () => runTauriCommand('open_shared');
 export const launchApp = (exec, withTerminal = false) => runTauriCommand('launch_app', { exec, withTerminal });
 export const startAppWatcher = () => runTauriCommand('start_app_watcher');
 

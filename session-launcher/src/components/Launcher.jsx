@@ -4,12 +4,14 @@ import React, { useState, useEffect } from 'react';
 import { 
     attachTerminal,
     openExplorer,
+    openShared,
     getInstalledApps,
     launchApp,
     startAppWatcher,
  } from '../api';
 import terminalIcon from '../assets/terminal-1.svg';
-import filesIcon from '../assets/files-1.png';
+import filesIcon from '../assets/folder-open-icon.svg';
+import sharedFilesIcon from '../assets/folder-upload-icon.svg';
 import searchIcon from '../assets/search-icon.svg';
 
 // Individual Icon Component
@@ -57,9 +59,15 @@ export const LauncherView = ({ refreshTrigger }) => {
         isCustom: true
       },
       {
-        name: 'Files',
+        name: 'File browser',
         exec: '__builtin_explorer__',
         icon: filesIcon,
+        isCustom: true
+      },
+      {
+        name: 'Shared files',
+        exec: '__builtin_shared__',
+        icon: sharedFilesIcon,
         isCustom: true
       }
     ];
@@ -132,6 +140,10 @@ export const LauncherView = ({ refreshTrigger }) => {
       else if (app.exec === '__builtin_explorer__') {
         const success = await openExplorer();
         if (!success) console.error("Failed to open file explorer.");
+      }
+      else if (app.exec === '__builtin_shared__') {
+        const success = await openShared();
+        if (!success) console.error("Failed to open shared directory.");
       }
     } else {
       const success = await launchApp(app.exec, false);

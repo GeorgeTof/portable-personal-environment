@@ -93,14 +93,19 @@ pub async fn configure_user(
     }
 
     // make the home directory accessible by the host file manager
-    let chmod_cmd = format!("chmod -R o+rwx /home/{}", username);
+    let chmod_cmd = format!("chmod o+rx /home/{}", username);
     if let Err(e) = run_lxc_shell_cmd(&chmod_cmd) {
-        return Ok((false, Some(format!("Failed to set portable permissions on home directory: {}", e))));
+        return Ok((false, Some(format!("Failed to set traversal permissions on home directory: {}", e))));
     }
 
-    // install the prerequisites (currently only for D-Bus configuration)
+    // install the prerequisites (for D-Bus configuration and ACLs)
     if let Err(e) = install_container_prerequisites() {
         return Ok((false, Some(format!("Prerequisite installation failure: {}", e))));
+    }
+
+    // create the shared transfer directory with bidirectional ACLs
+    if let Err(e) = setup_shared_directory(&username) {
+        return Ok((false, Some(format!("Failed to setup Shared directory: {}", e))));
     }
 
     // initialize the D-Bus session
@@ -185,13 +190,13 @@ fn install_container_prerequisites() -> Result<(), String> {
     }
 
     let install_cmd = if distro_target.contains("debian") || distro_target.contains("ubuntu") {
-        "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y dbus dbus-x11 dconf-gsettings-backend"
+        "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y dbus dbus-x11 dconf-gsettings-backend acl"
     } else if distro_target.contains("fedora") || distro_target.contains("rhel") {
-        "dnf install -y dbus dbus-x11 dbus-tools dconf"
+        "dnf install -y dbus dbus-x11 dbus-tools dconf acl"
     } else if distro_target.contains("arch") {
-        "pacman -Sy --noconfirm dbus dconf"
+        "pacman -Sy --noconfirm dbus dconf acl"
     } else if distro_target.contains("suse") {
-        "zypper --non-interactive install dbus-1 dbus-1-x11 dconf"
+        "zypper --non-interactive install dbus-1 dbus-1-x11 dconf acl"
     } else {
         let _ = std::process::Command::new("notify-send")
             .arg("PPE Launcher Warning")
@@ -205,6 +210,32 @@ fn install_container_prerequisites() -> Result<(), String> {
 
     // generate the system ID and create a symlink to it in a second standard location
     let _ = run_lxc_shell_cmd("dbus-uuidgen --ensure && ln -sf /var/lib/dbus/machine-id /etc/machine-id");
+
+    Ok(())
+}
+
+fn setup_shared_directory(username: &str) -> Result<(), String> {
+    let shared_path = format!("/home/{}/Shared", username);
+
+    let create_cmd = format!(
+        "mkdir -p {0} && chown {1}:{1} {0} && chmod 0775 {0}",
+        shared_path, username
+    );
+    run_lxc_shell_cmd(&create_cmd)?;
+
+    // ACLs on the directory itself
+    let access_acl = format!(
+        "setfacl -m u:{}:rwx,o::rwx {}",
+        username, shared_path
+    );
+    run_lxc_shell_cmd(&access_acl)?;
+
+    // default ACLs: every file or subdirectory created inside it inherits them
+    let default_acl = format!(
+        "setfacl -d -m u:{}:rwx,o::rwx,g::rwx,m::rwx {}",
+        username, shared_path
+    );
+    run_lxc_shell_cmd(&default_acl)?;
 
     Ok(())
 }

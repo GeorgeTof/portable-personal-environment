@@ -201,6 +201,25 @@ pub fn open_explorer(
         Err(e) => (false, Some(e)),
     }
 }
+#[tauri::command]
+pub fn open_shared(
+    state: tauri::State<'_, SessionState>,
+    file_manager: tauri::State<'_, FileManager>,
+) -> (bool, Option<String>) {
+    let user_lock = state.current_user.lock().unwrap();
+    let username = match &*user_lock {
+        Some(u) => u.clone(),
+        None => return (false, Some("No user is currently logged in.".to_string())),
+    };
+
+    let shared_path = format!("/mnt/ppe/lxc-data/personal-container/rootfs/home/{}/Shared", username);
+
+    match file_manager.open_directory(&shared_path) {
+        Ok(true) => (true, None),
+        Ok(false) => (false, Some("Failed to launch detached file manager.".to_string())),
+        Err(e) => (false, Some(e)),
+    }
+}
 
 #[derive(Serialize, Clone)]
 pub struct DesktopApp {
