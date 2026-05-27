@@ -53,35 +53,42 @@ impl TerminalManager {
         // Different terminals require different flags to execute commands.
         // .status() will block the Tauri backend thread until the terminal window is closed
         // perfectly pauses the UI until the user finishes the lxc-create menus
-        let status = match terminal.as_str() {
+        let mut cmd = match terminal.as_str() {
             "gnome-terminal" => {
                 // gnome-terminal deprecated the -e flag in favor of --
                 // obs! not tested on the new gnome terminal! -> todo check!
-                Command::new(terminal)
+                let mut c = Command::new(terminal);
+                c
                     .arg("--wait")
                     .arg("--")
                     .arg("bash")
                     .arg("-c")
-                    .arg(command)
-                    .status()
+                    .arg(command);
+                c
             },
             "alacritty" | "kitty" | "konsole" => {
-                Command::new(terminal)
+                let mut c = Command::new(terminal);
+                c
                     .arg("-e")
                     .arg("bash")
                     .arg("-c")
-                    .arg(command)
-                    .status()
+                    .arg(command);
+                c
             },
             _ => {
                 // standard fallback (for x-terminal-emulator, xfce4-terminal)
                 // obs! xfce4-terminal may have some special parsing rules -> todo check!
-                Command::new(terminal)
+                let mut c = Command::new(terminal);
+                c
                     .arg("-e")
-                    .arg(command)
-                    .status()
+                    .arg(command);
+                c
             }
         };
+
+        clean_command_env(&mut cmd);
+
+        let status = cmd.status();
 
         Ok(status.map(|s| s.success()).unwrap_or(false))
     }
@@ -90,33 +97,38 @@ impl TerminalManager {
         let terminal = self.get_or_find_terminal()?;
         
         // using .spawn() here instead of .status()
-        let status = match terminal.as_str() {
+        let mut cmd = match terminal.as_str() {
             "gnome-terminal" => {
-                Command::new(terminal)
+                let mut c = Command::new(&terminal);
+                c
                     .arg("--wait")
                     .arg("--")
                     .arg("bash")
                     .arg("-c")
-                    .arg(command)
-                    .spawn()
+                    .arg(command);
+                c
             },
             "alacritty" | "kitty" |"konsole" => {
-                Command::new(terminal)
+                let mut c = Command::new(&terminal);
+                c
                     .arg("-e")
                     .arg("bash")
                     .arg("-c")
-                    .arg(command)
-                    .spawn()
+                    .arg(command);
+                c
             },
             _ => {
-                Command::new(terminal)
+                let mut c = Command::new(&terminal);
+                c
                     .arg("-e")
-                    .arg(command)
-                    .spawn()
+                    .arg(command);
+                c
             }
         };
 
-        Ok(status.is_ok())
+        clean_command_env(&mut cmd);
+
+        Ok(cmd.spawn().is_ok())
     }
 
 
@@ -189,10 +201,11 @@ impl FileManager {
 
     pub fn open_directory(&self, path: &str) -> Result<bool, String> {
         let manager = self.get_or_find_manager()?;
-        
-        let status = Command::new(manager)
-            .arg(path)
-            .spawn(); // spawn detached
+
+        let mut cmd = Command::new(&manager);
+        cmd.arg(path);
+        clean_command_env(&mut cmd);
+        let status = cmd.spawn(); // spawn detached
 
         Ok(status.is_ok())
     }
@@ -277,4 +290,27 @@ pub fn resolve_icon_path(icon_name: &str) -> String {
     }
 
     "".to_string()
+}
+
+fn clean_command_env(cmd: &mut Command) {
+    // AppImage injected variables that point to its runtime mount
+    let appimage_vars = [
+        "PYTHONHOME", "PYTHONPATH", "PYTHONNOUSERSITE",
+        "PERLLIB", "PERL5LIB",
+        "LD_LIBRARY_PATH",
+        "GIO_MODULE_DIR", "GSETTINGS_SCHEMA_DIR", "GTK_PATH",
+        "GTK_DATA_PREFIX", "GTK_EXE_PREFIX",
+        "QT_PLUGIN_PATH", "QT_QPA_PLATFORM_PLUGIN_PATH",
+        "GST_PLUGIN_PATH", "GST_PLUGIN_SYSTEM_PATH",
+        "FONTCONFIG_PATH", "FONTCONFIG_FILE",
+        "XDG_DATA_DIRS",
+        "APPDIR", "APPIMAGE", "ARGV0",
+        "OWD",  // Original Working Directory
+    ];
+
+    for var in &appimage_vars {
+        cmd.env_remove(var);
+    }
+
+    cmd.env("XDG_DATA_DIRS", "/usr/local/share:/usr/share");
 }

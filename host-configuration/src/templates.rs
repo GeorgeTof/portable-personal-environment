@@ -38,8 +38,8 @@ fi
 
 sudo /bin/systemctl start mnt-ppe.automount
 
-#SESSION_SCRIPT="/mnt/ppe/session-launcher_0.1.0_amd64.AppImage"
-SESSION_SCRIPT="/mnt/ppe/session-launcher"
+SESSION_SCRIPT="/mnt/ppe/session-launcher_0.1.0_amd64.AppImage"
+#SESSION_SCRIPT="/mnt/ppe/session-launcher"
 
 if [ ! -f "$SESSION_SCRIPT" ]; then
     notify_error "Session script (session-launcher.AppImage) not found on the drive!"
