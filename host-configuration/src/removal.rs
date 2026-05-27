@@ -2,7 +2,7 @@ use std::process::{Command, Stdio};
 use std::path::Path;
 use crate::types::{DistroFamily, Task, TaskStatus};
 
-pub fn remove_configuration(host_distribution: &DistroFamily) -> Result<String, String> {
+pub fn remove_configuration(host_distribution: &DistroFamily, target_user: &str) -> Result<String, String> {
     let tasks = vec![
         Task { 
             description: "Stop active PPE systemd mounts", 
@@ -24,7 +24,7 @@ pub fn remove_configuration(host_distribution: &DistroFamily) -> Result<String, 
     for (i, task) in tasks.iter().enumerate() {
         println!("[{}/{}] {}", i + 1, tasks.len(), task.description);
 
-        match (task.action)(host_distribution) {
+        match (task.action)(host_distribution, target_user) {
             Ok(TaskStatus::ActionCompleted) => {
                 println!("{:>75}", "[ DONE ]\n");
                 modified_configurations = true;
@@ -48,7 +48,7 @@ pub fn remove_configuration(host_distribution: &DistroFamily) -> Result<String, 
     }
 }
 
-fn stop_systemd_mounts(_distro: &DistroFamily) -> Result<TaskStatus, String> {
+fn stop_systemd_mounts(_distro: &DistroFamily, _user: &str) -> Result<TaskStatus, String> {
     let mut changed = false;
     let units = ["mnt-ppe.automount", "mnt-ppe.mount"];
 
@@ -66,7 +66,7 @@ fn stop_systemd_mounts(_distro: &DistroFamily) -> Result<TaskStatus, String> {
     if changed { Ok(TaskStatus::ActionCompleted) } else { Ok(TaskStatus::JustChecked) }
 }
 
-fn remove_files(_distro: &DistroFamily) -> Result<TaskStatus, String> {
+fn remove_files(_distro: &DistroFamily, _user: &str) -> Result<TaskStatus, String> {
     let files_to_remove = vec![
         "/etc/udev/rules.d/99-lxc-gpu.rules",
         "/etc/udev/rules.d/99-ignore-ppe.rules",
@@ -89,10 +89,9 @@ fn remove_files(_distro: &DistroFamily) -> Result<TaskStatus, String> {
     if changed { Ok(TaskStatus::ActionCompleted) } else { Ok(TaskStatus::JustChecked) }
 }
 
-fn clean_usernet(_distro: &DistroFamily) -> Result<TaskStatus, String> {
-    let sudo_user = std::env::var("SUDO_USER").map_err(|_| "Please run with sudo!".to_string())?;
+fn clean_usernet(_distro: &DistroFamily, target_user: &str) -> Result<TaskStatus, String> {
     let usernet_path = "/etc/lxc/lxc-usernet";
-    let target_line = format!("{} veth lxcbr0 10", sudo_user);
+    let target_line = format!("{} veth lxcbr0 10", target_user);
 
     if !Path::new(usernet_path).exists() { return Ok(TaskStatus::JustChecked); }
 

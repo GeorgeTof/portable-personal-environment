@@ -1,5 +1,6 @@
 use std::fs;
 use std::env;
+use std::io::{self, Write};
 use crate::types::{DistroFamily};
 
 mod configuration;
@@ -56,19 +57,65 @@ fn main() {
 
     let is_removal = env::args().any(|arg| arg == "--remove");
 
+    let target_user = get_user_to_configure();
+
     if is_removal {
-        match removal::remove_configuration(&host_distribution) {
+        match removal::remove_configuration(&host_distribution, &target_user) {
             Ok(result) => println!("{result}"),
             Err(e) => eprintln!("Failed removal due to error: {e}"),
         }
     }
     else {
-        match configuration::configure(&host_distribution) {
+        match configuration::configure(&host_distribution, &target_user) {
             Ok(result) => {
                 println!("{result}");
                 println!("Please close the terminal window and remove the external drive.");
             },
             Err(e) => eprintln!("Failed configuration due to error: {e}"),
         }
+    }
+}
+
+fn get_user_to_configure() -> String {
+    let passwd_contents = fs::read_to_string("/etc/passwd").unwrap_or_default();
+    let mut valid_users = Vec::new();
+
+    for line in passwd_contents.lines() {
+        let parts: Vec<&str> = line.split(':').collect();
+        if parts.len() >= 3 {
+            if let Ok(uid) = parts[2].parse::<u32>() {
+                if uid >= 1000 && uid < 65534 { // standard users start at 1000, 65534 is nobody
+                    valid_users.push(parts[0].to_string());
+                }
+            }
+        }
+    }
+
+    if valid_users.is_empty() {
+        eprintln!("No standard users found on this system.");
+        std::process::exit(1);
+    }
+
+    loop {
+        println!("\nPlease select the user to configure the environment for:");
+        for (i, user) in valid_users.iter().enumerate() {
+            println!("  {}) {}", i + 1, user);
+        }
+        print!("\nEnter index or username: ");
+        let _ = io::stdout().flush();
+
+        let mut input = String::new();
+        io::stdin().read_line(&mut input).unwrap();
+        let input = input.trim();
+
+        if let Ok(index) = input.parse::<usize>() {
+            if index > 0 && index <= valid_users.len() {
+                return valid_users[index - 1].clone();
+            }
+        } else if valid_users.contains(&input.to_string()) {
+            return input.to_string();
+        }
+
+        println!("Invalid selection. Please try again.");
     }
 }

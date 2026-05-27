@@ -36,5 +36,5 @@ pub enum TaskStatus {
 
 pub struct Task {
     pub description: &'static str,
-    pub action: fn(&DistroFamily) -> Result<TaskStatus, String>,
+    pub action: fn(&DistroFamily, &str) -> Result<TaskStatus, String>,
 }

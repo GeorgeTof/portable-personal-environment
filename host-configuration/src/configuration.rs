@@ -5,7 +5,7 @@ use std::os::unix::fs::MetadataExt; // heavy import
 use crate::types::{DistroFamily, Task, TaskStatus};
 use crate::templates::*;
 
-pub fn configure(host_distribution: &DistroFamily) -> Result<String, String> {
+pub fn configure(host_distribution: &DistroFamily, target_user: &str) -> Result<String, String> {
     let tasks = vec![
         Task { 
             description: "Install required packages",
@@ -48,7 +48,7 @@ pub fn configure(host_distribution: &DistroFamily) -> Result<String, String> {
     for (i, task) in tasks.iter().enumerate() {
         println!("[{}/{}] {}", i + 1, tasks.len(), task.description);
 
-        match (task.action)(host_distribution) {
+        match (task.action)(host_distribution, target_user) {
             Ok(TaskStatus::ActionCompleted) => {
                 println!("{:>75}", "[ DONE ]\n");
                 modified_configurations = true;
@@ -74,7 +74,7 @@ pub fn configure(host_distribution: &DistroFamily) -> Result<String, String> {
 }
 
 
-fn install_prerequisites(distro: &DistroFamily) -> Result<TaskStatus, String> {
+fn install_prerequisites(distro: &DistroFamily, _user: &str) -> Result<TaskStatus, String> {
     let required_packages = vec!["lxc", "lxc-utils", "lxc-templates", "uidmap", "acl"];
     let mut installed = Vec::new();
     let mut missing = Vec::new();
@@ -158,13 +158,9 @@ fn install_debian_prerequisites(missing: &[&str]) -> Result<(), String> {
     }
 }
 
-fn allow_veth_connections(_distro: &DistroFamily) -> Result<TaskStatus, String> {
-    let sudo_user = std::env::var("SUDO_USER").map_err(|_| {
-        "Could not determine original user. Please run with sudo!".to_string()
-    })?;
-
+fn allow_veth_connections(_distro: &DistroFamily, target_user: &str) -> Result<TaskStatus, String> {
     let usernet_path = "/etc/lxc/lxc-usernet";
-    let expected_line = format!("{} veth lxcbr0 10", sudo_user);
+    let expected_line = format!("{} veth lxcbr0 10", target_user);
 
     if let Ok(contents) = std::fs::read_to_string(usernet_path) {
         if contents.lines().any(|line| line.trim() == expected_line) {
@@ -184,14 +180,10 @@ fn allow_veth_connections(_distro: &DistroFamily) -> Result<TaskStatus, String> 
     Ok(TaskStatus::ActionCompleted)
 }
 
-fn create_mount_location(_distro: &DistroFamily) -> Result<TaskStatus, String> {
+fn create_mount_location(_distro: &DistroFamily, target_user: &str) -> Result<TaskStatus, String> {
     let mount_path = "/mnt/ppe";
     let automount_unit = "mnt-ppe.automount";
     let mut already_configured = false;
-    
-    let sudo_user = std::env::var("SUDO_USER").map_err(|_| {
-        "Could not determine original user. Please run with sudo!".to_string()
-    })?;
 
     let was_automount_active = Command::new("systemctl")
         .arg("is-active")
@@ -216,8 +208,8 @@ fn create_mount_location(_distro: &DistroFamily) -> Result<TaskStatus, String> {
         if let Ok(metadata) = std::fs::metadata(mount_path) {
             
             // get the numeric UID and GID of the SUDO_USER
-            let uid_output = Command::new("id").arg("-u").arg(&sudo_user).output();
-            let gid_output = Command::new("id").arg("-g").arg(&sudo_user).output();
+            let uid_output = Command::new("id").arg("-u").arg(target_user).output();
+            let gid_output = Command::new("id").arg("-g").arg(target_user).output();
 
             if let (Ok(uid_res), Ok(gid_res)) = (uid_output, gid_output) {
                 let expected_uid = String::from_utf8_lossy(&uid_res.stdout).trim().parse::<u32>().unwrap_or(0);
@@ -242,7 +234,7 @@ fn create_mount_location(_distro: &DistroFamily) -> Result<TaskStatus, String> {
         print!("\n  -> Making current user its owner");
         // (User:Group)
         let chown_status = Command::new("chown")
-            .arg(format!("{}:{}", sudo_user, sudo_user)) 
+            .arg(format!("{}:{}", target_user, target_user)) 
             .arg(mount_path)
             .status()
             .map_err(|e| format!("Failed to execute chown: {}", e))?;
@@ -279,7 +271,7 @@ fn create_mount_location(_distro: &DistroFamily) -> Result<TaskStatus, String> {
     }
 }
 
-fn access_gpu_devices(_distro: &DistroFamily) -> Result<TaskStatus, String> {
+fn access_gpu_devices(_distro: &DistroFamily, _user: &str) -> Result<TaskStatus, String> {
     let rule_path = "/etc/udev/rules.d/99-lxc-gpu.rules";
 
     if let Ok(existing_content) = std::fs::read_to_string(rule_path) {
@@ -316,7 +308,7 @@ fn access_gpu_devices(_distro: &DistroFamily) -> Result<TaskStatus, String> {
     Ok(TaskStatus::ActionCompleted)
 }
 
-fn auto_mount(_distro: &DistroFamily) -> Result<TaskStatus, String> {
+fn auto_mount(_distro: &DistroFamily, _user: &str) -> Result<TaskStatus, String> {
     let udev_rule_path = "/etc/udev/rules.d/99-ignore-ppe.rules";
     let mount_unit_path = "/etc/systemd/system/mnt-ppe.mount";
     let automount_unit_path = "/etc/systemd/system/mnt-ppe.automount";
@@ -357,18 +349,14 @@ fn auto_mount(_distro: &DistroFamily) -> Result<TaskStatus, String> {
     Ok(TaskStatus::ActionCompleted)
 }
 
-fn allow_unprivileged_mount(_distro: &DistroFamily) -> Result<TaskStatus, String> {
-    let sudo_user = std::env::var("SUDO_USER").map_err(|_| {
-        "Could not determine original user. Please run with sudo!".to_string()
-    })?;
-
+fn allow_unprivileged_mount(_distro: &DistroFamily, target_user: &str) -> Result<TaskStatus, String> {
     // large index (99) guarantees that the rules will be applied last and overwrite the previous ones
     let sudoers_path = "/etc/sudoers.d/99-ppe-mount";
     
     // allow stop, reset-failed, and start without a password
     let sudoers_content = format!(
         "{} ALL=(ALL) NOPASSWD: /bin/systemctl stop mnt-ppe.automount, /bin/systemctl stop mnt-ppe.mount, /bin/systemctl reset-failed mnt-ppe.automount, /bin/systemctl reset-failed mnt-ppe.mount, /bin/systemctl start mnt-ppe.automount\n",
-        sudo_user
+        target_user
     );
 
     if let Ok(existing_content) = std::fs::read_to_string(sudoers_path) {
@@ -394,7 +382,7 @@ fn allow_unprivileged_mount(_distro: &DistroFamily) -> Result<TaskStatus, String
     Ok(TaskStatus::ActionCompleted)
 }
 
-fn create_intermediary_script(_distro: &DistroFamily) -> Result<TaskStatus, String> {
+fn create_intermediary_script(_distro: &DistroFamily, _user: &str) -> Result<TaskStatus, String> {
     let stub_path = "/usr/local/bin/ppe-launcher-stub";
 
     if let Ok(existing_content) = std::fs::read_to_string(stub_path) {
@@ -420,7 +408,7 @@ fn create_intermediary_script(_distro: &DistroFamily) -> Result<TaskStatus, Stri
     Ok(TaskStatus::ActionCompleted)
 }
 
-fn link_desktop_shrtcut(_distro: &DistroFamily) -> Result<TaskStatus, String> {
+fn link_desktop_shrtcut(_distro: &DistroFamily, _user: &str) -> Result<TaskStatus, String> {
     let desktop_path = "/usr/share/applications/ppe-launcher.desktop";
 
     if let Ok(existing_content) = std::fs::read_to_string(desktop_path) {
