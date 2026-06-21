@@ -20,8 +20,7 @@ const runTauriCommandWithAlternative = async (commandName, args = {}) => {
     const [success, errorMessage] = await invoke(commandName, args);
     
     if (!success && errorMessage) {
-      // catch expected error for stopping the container
-      if (errorMessage === "STOP-TIMEOUT") {
+      if (errorMessage === "TIMEOUT") {
         const force = window.confirm("The container is taking too long to shut down (an app might be hanging). Would you like to force stop it?");
         
         if (force) {
