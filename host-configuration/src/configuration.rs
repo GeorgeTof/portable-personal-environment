@@ -394,7 +394,7 @@ fn create_intermediary_script(_distro: &DistroFamily, _user: &str) -> Result<Tas
     std::fs::write(stub_path, LAUNCHER_STUB_SCRIPT)
         .map_err(|e| format!("Failed to write stub script to {}: {}", stub_path, e))?;
 
-    // only r+x permissions for unprivileged users
+    // no write permissions for unprivileged users
     let chmod_status = Command::new("chmod")
         .arg("755")
         .arg(stub_path)
