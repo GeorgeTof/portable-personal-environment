@@ -253,16 +253,23 @@ body, html, #root {
 /* - - Search bar - -  */
 .search-wrapper {
   position: sticky;
-  top: 0;
+  /* Negative offset cancels .main-container's 2rem top padding so the
+     stripe sticks flush to the very top when the app list scrolls. */
+  top: -2rem;
   z-index: 10;
-  width: 100%;
+  /* Break out of .main-container's 2rem padding so the stripe spans the
+     full width and touches the top edge, with no gap. */
+  width: calc(100% + 4rem);
+  margin: -2rem -2rem 0 -2rem;
+  /* Include this wrapper's own horizontal padding in the width above,
+     otherwise content-box sizing adds it on top and overflows to the right. */
+  box-sizing: border-box;
   background-color: #1e1e2e;
   display: flex;
   justify-content: center;
-  padding: 1rem 0 0.5rem 0;
-  padding: 0.25rem 2rem 0.5rem 2rem;
-  padding-left: 2rem;
-  padding-right: 2rem;
+  /* Small top padding = the margin between the top of the stripe and the
+     search bar itself. */
+  padding: 0.75rem 2rem 0.5rem 2rem;
 }
 
 .search-container {
