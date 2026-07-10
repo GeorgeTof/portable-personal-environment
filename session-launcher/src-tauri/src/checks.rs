@@ -32,7 +32,6 @@ pub fn check_host_config() -> (bool, Option<String>) {
         return (false, Some(format!("Network permissions for '{}' not found in /etc/lxc/lxc-usernet.", user)));
     }
 
-    // #todo pls-double-check - for discrete gpu
     let dri_path = "/dev/dri";
     if Path::new(dri_path).exists() {
         if let Ok(entries) = fs::read_dir(dri_path) {
@@ -111,7 +110,7 @@ pub fn check_container_integrity() -> (bool, Option<String>) {
     for file in essential_files.iter() {
         let full_path = format!("{}/{}", rootfs_dir, file);
         
-        // Note: .exists() automatically resolves and follows symlinks, 
+        // Note: .exists() automatically resolves and follows symlinks
         if !Path::new(&full_path).exists() {
             return (false, Some(format!(
                 "Container integrity compromised: Essential file '{}' is missing.", 

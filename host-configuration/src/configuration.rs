@@ -207,7 +207,7 @@ fn create_mount_location(_distro: &DistroFamily, target_user: &str) -> Result<Ta
     if std::path::Path::new(mount_path).exists() {
         if let Ok(metadata) = std::fs::metadata(mount_path) {
             
-            // get the numeric UID and GID of the SUDO_USER
+            // get the numeric UID and GID of the selected user
             let uid_output = Command::new("id").arg("-u").arg(target_user).output();
             let gid_output = Command::new("id").arg("-g").arg(target_user).output();
 

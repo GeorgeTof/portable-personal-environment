@@ -52,7 +52,6 @@ impl TerminalManager {
         
         // Different terminals require different flags to execute commands.
         // .status() will block the Tauri backend thread until the terminal window is closed
-        // perfectly pauses the UI until the user finishes the lxc-create menus
         let mut cmd = match terminal.as_str() {
             "gnome-terminal" => {
                 // gnome-terminal deprecated the -e flag in favor of --
@@ -259,7 +258,7 @@ pub fn resolve_icon_path(icon_name: &str) -> String {
         if Path::new(&host_path).exists() {
             return host_path;
         }
-        // If it starts with / but wasn't found, strip extension and try the fallback logic ???
+        // If it starts with / but wasn't found, strip extension and try the fallback logic
         // (Sometimes absolute paths omit the extension)
     }
 
@@ -305,7 +304,7 @@ fn clean_command_env(cmd: &mut Command) {
         "FONTCONFIG_PATH", "FONTCONFIG_FILE",
         "XDG_DATA_DIRS",
         "APPDIR", "APPIMAGE", "ARGV0",
-        "OWD",  // Original Working Directory
+        "OWD",
     ];
 
     for var in &appimage_vars {

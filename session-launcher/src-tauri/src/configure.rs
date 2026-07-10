@@ -129,7 +129,6 @@ pub fn configure_wayland_access() -> (bool, Option<String>) {
     let wayland_socket = format!("{}/{}", runtime_dir, wayland_display);
 
     if !Path::new(&wayland_socket).exists() {
-        // (maybe add X11 logic as fallback)
         return (false, Some(format!("Wayland socket not found at {}", wayland_socket)));
     }
 
