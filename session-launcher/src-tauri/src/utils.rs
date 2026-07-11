@@ -305,6 +305,9 @@ fn clean_command_env(cmd: &mut Command) {
         "XDG_DATA_DIRS",
         "APPDIR", "APPIMAGE", "ARGV0",
         "OWD",
+        "GDK_PIXBUF_MODULE_FILE", "GDK_PIXBUF_MODULEDIR",
+        "GTK_IM_MODULE_FILE", "GTK_THEME",
+        "GIO_EXTRA_MODULES", "GDK_BACKEND",
     ];
 
     for var in &appimage_vars {
