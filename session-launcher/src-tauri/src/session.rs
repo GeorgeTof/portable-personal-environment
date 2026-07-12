@@ -49,7 +49,11 @@ pub fn start_container() -> (bool, Option<String>) {
     // bind the dynamic host socket to a static 'tmp/wayland-0' inside the container.
     let mount_entry = format!("{} tmp/wayland-0 none bind,create=file 0 0", host_socket_path);
 
-    let status = Command::new("lxc-start")
+    let status = Command::new("systemd-run")
+        .arg("--user")
+        .arg("--scope")
+        .arg("-p").arg("Delegate=yes")
+        .arg("lxc-start")
         .arg("-n").arg("personal-container")
         .arg("-P").arg("/mnt/ppe/lxc-data")
         .arg("-s").arg(format!("lxc.mount.entry={}", mount_entry))
