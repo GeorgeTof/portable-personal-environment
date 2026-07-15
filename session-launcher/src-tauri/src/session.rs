@@ -12,6 +12,7 @@ use tauri::Emitter;
 
 use crate::templates::UNMOUNT_SCRIPT;
 use crate::utils::{get_wayland_socket_info, TerminalManager, FileManager, resolve_icon_path, run_lxc_shell_cmd};
+use crate::configure::configure_wayland_access;
 
 
 pub struct SessionState {
@@ -60,7 +61,12 @@ pub fn start_container() -> (bool, Option<String>) {
         .status();
 
     match status {
-        Ok(s) if s.success() => (true, None),
+        Ok(s) if s.success() => {
+            if let (false, Some(e)) = configure_wayland_access() {
+                return (false, Some(format!("Container started but Wayland access could not be configured: {}", e)));
+            }
+            (true, None)
+        },
         Ok(_) => (false, Some("lxc-start command failed to execute. Check if the container is already running.".to_string())),
         Err(e) => (false, Some(format!("Failed to spawn lxc-start process: {}", e))),
     }
