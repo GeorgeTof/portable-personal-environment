@@ -1,0 +1,23 @@
+# Rust (Host Config CLI & Tauri Backend)
+target/
+*.rs.bk
+
+# Node.js & Vite (Session Launcher Frontend)
+node_modules/
+dist/
+build/
+.npm/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# OS & Editor Specific
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+flycheck_*
+*~
+*.swp
