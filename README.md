@@ -60,8 +60,8 @@ Invoked seamlessly by the host desktop entry mechanism, it verifies host integri
 It also abstracts complex container commands behind an intuitive GUI application grid with live application discovery, an integrated terminal, and a bidirectional `/Shared` file-transfer folder.
 
 <p align="center">
-  <img src="./docs/launcher-ss.png" alt="Launcher Application Grid" width="48%" />
-  <img src="./docs/component-diagram.png" alt="Component Deployment Diagram" width="48%" />
+  <img src="./docs/launcher-ss.png" alt="Launcher Application Grid" width="44%" />
+  <img src="./docs/component-diagram.png" alt="Component Deployment Diagram" width="52%" />
 </p>
 
 👉 **[Read the Session Launcher README](./session-launcher/README.md)**
